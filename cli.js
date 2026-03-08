@@ -43,7 +43,8 @@ async function run() {
         process.exit(0);
     }
 
-    let errorCount = 0;
+    let lintErrorCount = 0;
+    let processingErrorCount = 0;
     let fixCount = 0;
 
     for (const file of files) {
@@ -58,25 +59,37 @@ async function run() {
                     fixCount++;
                 } else {
                     console.error(`Linting Error: ${file} is not formatted correctly.`);
-                    errorCount++;
+                    lintErrorCount++;
                 }
             }
         } catch (err) {
             console.error(`Error processing ${file}:`, err);
-            if (!argv.fix) {
-                errorCount++;
-            }
+            processingErrorCount++;
         }
     }
 
     if (argv.fix) {
+        if (processingErrorCount > 0) {
+            console.error(
+                `\nSquirrelly Syntax Audit Failed: Encountered errors while processing ${processingErrorCount} files.`,
+            );
+            process.exit(1);
+        }
         console.log(`\nSquirrelly Syntax Audit Complete: Fixed ${fixCount} files.`);
         process.exit(0);
     } else {
-        if (errorCount > 0) {
-            console.error(
-                `\nSquirrelly Syntax Audit Failed: ${errorCount} files require formatting. Run with --fix to resolve.`,
-            );
+        const totalErrors = lintErrorCount + processingErrorCount;
+        if (totalErrors > 0) {
+            if (processingErrorCount > 0) {
+                console.error(
+                    `\nSquirrelly Syntax Audit Failed: Encountered errors while processing ${processingErrorCount} files.`,
+                );
+            }
+            if (lintErrorCount > 0) {
+                console.error(
+                    `\nSquirrelly Syntax Audit Failed: ${lintErrorCount} files require formatting. Run with --fix to resolve.`,
+                );
+            }
             process.exit(1);
         } else {
             console.log(`\nSquirrelly Syntax Audit Passed: All files are formatted correctly.`);
