@@ -61,6 +61,11 @@ const argv = yargs(hideBin(process.argv))
         default: true,
         description: "Enable ANSI color output for text reports",
     })
+    .option("concurrency", {
+        type: "number",
+        default: 1,
+        description: "Number of files to process in parallel (minimum 1)",
+    })
     .help()
     .parse();
 
@@ -69,8 +74,40 @@ async function run() {
     const useJsonReport = argv.report === "json";
     const colors = createColors(argv.color && !useJsonReport);
     const globs = argv.globs;
+    const concurrency = Number(argv.concurrency);
 
     const results = [];
+
+    function emitConfigurationError(message) {
+        if (useJsonReport) {
+            console.log(
+                JSON.stringify(
+                    {
+                        mode: argv.fix ? "fix" : "check",
+                        success: false,
+                        concurrency,
+                        filesMatched: 0,
+                        fixedFiles: 0,
+                        lintErrors: 0,
+                        processingErrors: 1,
+                        durationMs: Math.round(performance.now() - startTime),
+                        results: [
+                            {
+                                status: "error",
+                                error: message,
+                            },
+                        ],
+                    },
+                    null,
+                    4,
+                ),
+            );
+            return process.exit(1);
+        }
+
+        console.error(colors.red(message));
+        process.exit(1);
+    }
 
     function exitWithReport({
         filesMatched,
@@ -87,6 +124,7 @@ async function run() {
                     {
                         mode: argv.fix ? "fix" : "check",
                         success,
+                        concurrency,
                         filesMatched,
                         fixedFiles: fixCount,
                         lintErrors: lintErrorCount,
@@ -146,32 +184,11 @@ async function run() {
     }
 
     if (!globs || globs.length === 0) {
-        if (useJsonReport) {
-            console.log(
-                JSON.stringify(
-                    {
-                        mode: argv.fix ? "fix" : "check",
-                        success: false,
-                        filesMatched: 0,
-                        fixedFiles: 0,
-                        lintErrors: 0,
-                        processingErrors: 1,
-                        durationMs: Math.round(performance.now() - startTime),
-                        results: [
-                            {
-                                status: "error",
-                                error: "Please specify at least one glob pattern.",
-                            },
-                        ],
-                    },
-                    null,
-                    4,
-                ),
-            );
-            process.exit(1);
-        }
-        console.error(colors.red("Please specify at least one glob pattern."));
-        process.exit(1);
+        emitConfigurationError("Please specify at least one glob pattern.");
+    }
+
+    if (!Number.isInteger(concurrency) || concurrency < 1) {
+        emitConfigurationError("Invalid `--concurrency` value. Use an integer >= 1.");
     }
 
     const files = await fg(globs, { absolute: true, ignore: ["**/node_modules/**"] });
@@ -183,6 +200,7 @@ async function run() {
                     {
                         mode: argv.fix ? "fix" : "check",
                         success: true,
+                        concurrency,
                         filesMatched: 0,
                         fixedFiles: 0,
                         lintErrors: 0,
@@ -194,46 +212,97 @@ async function run() {
                     4,
                 ),
             );
-            process.exit(0);
+            return process.exit(0);
         }
         console.log(colors.gray("No files matched the provided pattern(s)."));
         process.exit(0);
     }
 
+    const fileResults = new Array(files.length);
+    let nextIndex = 0;
+
+    async function processOneFile(file) {
+        try {
+            const originalContent = await fs.readFile(file, "utf8");
+            const lintResult = lintContent(originalContent);
+
+            if (!lintResult.changed) {
+                return {
+                    file,
+                    status: "unchanged",
+                };
+            }
+
+            if (argv.fix) {
+                await fs.writeFile(file, lintResult.content);
+                return {
+                    file,
+                    status: "fixed",
+                };
+            }
+
+            return {
+                file,
+                status: "needs-formatting",
+            };
+        } catch (err) {
+            return {
+                file,
+                status: "error",
+                error: err instanceof Error ? err.message : String(err),
+            };
+        }
+    }
+
+    const workerCount = Math.min(concurrency, files.length);
+    await Promise.all(
+        Array.from({ length: workerCount }, async () => {
+            while (true) {
+                const index = nextIndex;
+                nextIndex++;
+
+                if (index >= files.length) {
+                    return;
+                }
+
+                fileResults[index] = await processOneFile(files[index]);
+            }
+        }),
+    );
+
     let lintErrorCount = 0;
     let processingErrorCount = 0;
     let fixCount = 0;
 
-    for (const file of files) {
-        try {
-            const originalContent = await fs.readFile(file, "utf8");
-            const result = lintContent(originalContent);
+    for (const result of fileResults) {
+        if (!result || result.status === "unchanged") {
+            continue;
+        }
 
-            if (result.changed) {
-                if (argv.fix) {
-                    await fs.writeFile(file, result.content);
-                    if (!useJsonReport) {
-                        console.log(`${colors.cyan("Formatted:")} ${file}`);
-                    }
-                    results.push({ file, status: "fixed" });
-                    fixCount++;
-                } else {
-                    if (!useJsonReport) {
-                        console.error(
-                            `${colors.red("Linting Error:")} ${file} is not formatted correctly.`,
-                        );
-                    }
-                    results.push({ file, status: "needs-formatting" });
-                    lintErrorCount++;
-                }
-            }
-        } catch (err) {
-            const errorMessage = err instanceof Error ? err.message : String(err);
+        if (result.status === "fixed") {
+            fixCount++;
+            results.push({ file: result.file, status: result.status });
             if (!useJsonReport) {
-                console.error(`${colors.red("Error processing")} ${file}:`, err);
+                console.log(`${colors.cyan("Formatted:")} ${result.file}`);
             }
-            results.push({ file, status: "error", error: errorMessage });
-            processingErrorCount++;
+            continue;
+        }
+
+        if (result.status === "needs-formatting") {
+            lintErrorCount++;
+            results.push({ file: result.file, status: result.status });
+            if (!useJsonReport) {
+                console.error(
+                    `${colors.red("Linting Error:")} ${result.file} is not formatted correctly.`,
+                );
+            }
+            continue;
+        }
+
+        processingErrorCount++;
+        results.push({ file: result.file, status: result.status, error: result.error });
+        if (!useJsonReport) {
+            console.error(`${colors.red("Error processing")} ${result.file}: ${result.error}`);
         }
     }
 

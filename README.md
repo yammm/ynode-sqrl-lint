@@ -57,6 +57,14 @@ npx sqrl-lint "src/**/*.sqrl" --no-color
 
 Disables ANSI color styling in text output.
 
+### Parallel Processing
+
+```bash
+npx sqrl-lint "src/**/*.sqrl" --fix --concurrency 4
+```
+
+Processes files with bounded parallelism for faster runs on large repositories.
+
 ## Configuration in `package.json`
 
 Because this is a standard ecosystem plugin, you can easily wire it into your `@ynode` `lint:guardrails` group alongside CSS and HTML linting:

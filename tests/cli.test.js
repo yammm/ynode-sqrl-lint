@@ -88,6 +88,7 @@ test("check mode supports --report json output", () => {
         const payload = JSON.parse(result.stdout);
         assert.strictEqual(payload.mode, "check");
         assert.strictEqual(payload.success, false);
+        assert.strictEqual(payload.concurrency, 1);
         assert.strictEqual(payload.filesMatched, 1);
         assert.strictEqual(payload.fixedFiles, 0);
         assert.strictEqual(payload.lintErrors, 1);
@@ -99,6 +100,39 @@ test("check mode supports --report json output", () => {
                 status: "needs-formatting",
             },
         ]);
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
+});
+
+test("fix mode supports --concurrency for parallel file processing", () => {
+    const dir = makeTempDir();
+    const a = path.join(dir, "a.sqrl");
+    const b = path.join(dir, "b.sqrl");
+    const c = path.join(dir, "c.sqrl");
+    try {
+        writeFileSync(a, "{{foo}}", "utf8");
+        writeFileSync(b, "{{bar}}", "utf8");
+        writeFileSync(c, "{{baz}}", "utf8");
+
+        const result = runCli([path.join(dir, "*.sqrl"), "--fix", "--concurrency", "3"]);
+        assert.strictEqual(result.status, 0);
+        assert.strictEqual(readFileSync(a, "utf8"), "{{ foo }}");
+        assert.strictEqual(readFileSync(b, "utf8"), "{{ bar }}");
+        assert.strictEqual(readFileSync(c, "utf8"), "{{ baz }}");
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
+});
+
+test("invalid --concurrency values fail fast", () => {
+    const dir = makeTempDir();
+    const file = path.join(dir, "sample.sqrl");
+    try {
+        writeFileSync(file, "{{foo}}", "utf8");
+        const result = runCli([file, "--concurrency", "0"]);
+        assert.strictEqual(result.status, 1);
+        assert.match(result.stderr, /Invalid `--concurrency` value/);
     } finally {
         rmSync(dir, { recursive: true, force: true });
     }
