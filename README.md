@@ -1,12 +1,10 @@
 # @ynode/sqrl-lint
 
-A dedicated, lightning-fast AST regex parser and formatter for Squirrelly (`.sqrl`) templates, built specifically for
-the `@ynode` Fastify ecosystem.
+A dedicated, lightning-fast AST regex parser and formatter for Squirrelly (`.sqrl`) templates, built specifically for the `@ynode` Fastify ecosystem.
 
 ## Features
 
-- **Strict Formatting:** Enforces consistent spacing for helpers (`{{@`, `{{#`), base brackets (`{{`, `}}`), raw outputs
-  (`{{{`, `}}}`), and block closures (`{{/`).
+- **Strict Formatting:** Enforces consistent spacing for helpers (`{{@`, `{{#`), base brackets (`{{`, `}}`), raw outputs (`{{{`, `}}}`), and block closures (`{{/`).
 - **Read-Only Linters:** Fails CI pipelines seamlessly by returning exit code `1` when files violate spacing norms.
 - **Auto-Repair:** The `--fix` option seamlessly rewrites dirty files back to pristine format natively.
 - **Fast-Glob Powered:** Built-in `fast-glob` processing natively supports arbitrary inclusion and exclusion targeting.
@@ -39,8 +37,7 @@ Automatically targets syntax violations and corrects the text natively. The proc
 
 ## Configuration in `package.json`
 
-Because this is a standard ecosystem plugin, you can easily wire it into your `@ynode` `lint:guardrails` group alongside
-CSS and HTML linting:
+Because this is a standard ecosystem plugin, you can easily wire it into your `@ynode` `lint:guardrails` group alongside CSS and HTML linting:
 
 ```json
 "scripts": {

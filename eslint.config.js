@@ -34,7 +34,13 @@ import pluginPrettier from "eslint-plugin-prettier";
 import simpleImportSort from "eslint-plugin-simple-import-sort";
 import globals from "globals";
 
-const commonIgnores = ["**/node_modules/**", "**/.build/**", "**/*.min.js", "**/package-lock.json", "**/docs/**"];
+const commonIgnores = [
+    "**/node_modules/**",
+    "**/.build/**",
+    "**/*.min.js",
+    "**/package-lock.json",
+    "**/docs/**",
+];
 
 export default defineConfig([
     {

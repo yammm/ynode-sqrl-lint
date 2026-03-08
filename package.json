@@ -4,9 +4,27 @@
     "description": "Squirrelly syntax linter and formatter",
     "type": "module",
     "main": "src/linter.js",
+    "exports": {
+        ".": "./src/linter.js"
+    },
     "bin": {
         "sqrl-lint": "cli.js"
     },
+    "engines": {
+        "node": ">=20.0.0"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/yammm/ynode-sqrl-lint.git"
+    },
+    "keywords": [
+        "squirrelly",
+        "sqrl",
+        "template",
+        "linter",
+        "formatter",
+        "ynode"
+    ],
     "scripts": {
         "format": "prettier --write .",
         "format:check": "prettier --check .",
