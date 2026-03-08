@@ -9,7 +9,7 @@ Welcome! We appreciate your help in improving the `@ynode/sqrl-lint` syntax form
 Before contributing, please securely install the local Git hooks which enforce commit message formatting and other standards:
 
 ```bash
-./scripts/hooks/pre-commit
+./scripts/setup-hooks
 ```
 
 ### Development Commands
