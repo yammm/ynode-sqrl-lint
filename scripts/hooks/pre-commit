@@ -10,16 +10,19 @@
 # Git pre-commit hook
 #
 
-set -e
+set -euo pipefail
 
-FILES=$(git diff --cached --name-only --diff-filter=ACMRTUXB | tr '\n' ' ')
+FILES=()
+while IFS= read -r -d '' file; do
+    FILES+=("$file")
+done < <(git diff --cached --name-only -z --diff-filter=ACMRTUXB)
 
-if [ -n "$FILES" ]; then
+if [ "${#FILES[@]}" -gt 0 ]; then
     echo "[pre-commit] Running Prettier..."
-    npx prettier --check --ignore-unknown $FILES
+    npx prettier --check --ignore-unknown "${FILES[@]}"
 
     echo "[pre-commit] Running ESLint..."
-    npx eslint --no-warn-ignored $FILES
+    npx eslint --no-warn-ignored "${FILES[@]}"
 fi
 
 echo "[pre-commit] Running Test Suite..."

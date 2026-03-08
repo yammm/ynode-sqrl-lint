@@ -5,7 +5,7 @@ REM MIT License
 setlocal enabledelayedexpansion
 set "FILES="
 for /f "delims=" %%i in ('git diff --cached --name-only --diff-filter=ACMRTUXB') do (
-    set "FILES=!FILES! %%i"
+    set "FILES=!FILES! \"%%i\""
 )
 
 if defined FILES (
