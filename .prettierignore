@@ -1,0 +1,9 @@
+node_modules
+dist
+build
+docs
+.next
+coverage
+*.min.js
+CHANGELOG.md
+\nCHANGELOG.md\n\n
