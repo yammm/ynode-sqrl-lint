@@ -1,6 +1,6 @@
 # @ynode/sqrl-lint
 
-A dedicated, lightning-fast AST regex parser and formatter for Squirrelly (`.sqrl`) templates, built specifically for the `@ynode` Fastify ecosystem.
+A dedicated, lightning-fast regex-based linter and formatter for Squirrelly (`.sqrl`) templates, built specifically for the `@ynode` Fastify ecosystem.
 
 ## Features
 
