@@ -1,0 +1,5 @@
+{{@ extends() }}
+<div class="{{ foo }}">
+    {{# if(user.isAdmin) }}{{{ rawHtml }}}{{/ if }}
+    {{@ custom() /}}
+</div>
