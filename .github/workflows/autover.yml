@@ -3,6 +3,8 @@ name: autover
 on:
     pull_request:
         types: [opened, synchronize, reopened, labeled, unlabeled]
+    push:
+        branches: [main]
     workflow_dispatch:
 
 permissions:
