@@ -90,41 +90,41 @@ async function run() {
                     `\nSquirrelly Syntax Audit Failed: Encountered errors while processing ${processingErrorCount} files in ${durationMs}ms.`,
                 ),
             );
-            process.exit(1);
+            return process.exit(1);
         }
         console.log(
             colors.green(
                 `\nSquirrelly Syntax Audit Complete: Fixed ${fixCount} files in ${colors.bold(durationMs + "ms")}.`,
             ),
         );
-        process.exit(0);
-    } else {
-        const totalErrors = lintErrorCount + processingErrorCount;
-        if (totalErrors > 0) {
-            if (processingErrorCount > 0) {
-                console.error(
-                    colors.red(
-                        `\nSquirrelly Syntax Audit Failed: Encountered errors while processing ${processingErrorCount} files in ${durationMs}ms.`,
-                    ),
-                );
-            }
-            if (lintErrorCount > 0) {
-                console.error(
-                    colors.red(
-                        `\nSquirrelly Syntax Audit Failed: ${lintErrorCount} files require formatting. Run with --fix to resolve (took ${durationMs}ms).`,
-                    ),
-                );
-            }
-            process.exit(1);
-        } else {
-            console.log(
-                colors.green(
-                    `\nSquirrelly Syntax Audit Passed: All files are formatted correctly (${colors.bold(durationMs + "ms")}).`,
+        return process.exit(0);
+    }
+
+    const totalErrors = lintErrorCount + processingErrorCount;
+    if (totalErrors > 0) {
+        if (processingErrorCount > 0) {
+            console.error(
+                colors.red(
+                    `\nSquirrelly Syntax Audit Failed: Encountered errors while processing ${processingErrorCount} files in ${durationMs}ms.`,
                 ),
             );
-            process.exit(0);
         }
+        if (lintErrorCount > 0) {
+            console.error(
+                colors.red(
+                    `\nSquirrelly Syntax Audit Failed: ${lintErrorCount} files require formatting. Run with --fix to resolve (took ${durationMs}ms).`,
+                ),
+            );
+        }
+        return process.exit(1);
     }
+
+    console.log(
+        colors.green(
+            `\nSquirrelly Syntax Audit Passed: All files are formatted correctly (${colors.bold(durationMs + "ms")}).`,
+        ),
+    );
+    process.exit(0);
 }
 
 run().catch((err) => {
