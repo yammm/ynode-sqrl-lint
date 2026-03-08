@@ -1,0 +1,40 @@
+{
+  "name": "@ynode/sqrl-lint",
+  "version": "1.0.0",
+  "description": "Squirrelly syntax linter and formatter",
+  "type": "module",
+  "main": "src/linter.js",
+  "bin": {
+    "sqrl-lint": "cli.js"
+  },
+  "scripts": {
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint ./",
+    "lint:fix": "eslint ./ --fix",
+    "ver:preview": "npx autover --no-amend --dry-run --short",
+    "ver:apply": "npx autover --guard-unchanged --short",
+    "postversion": "git push && git push --tags",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "fast-glob": "^3.3.2",
+    "yargs": "^18.0.0"
+  },
+  "author": "Michael Welter <me@mikinho.com>",
+  "license": "MIT",
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@eslint/json": "^1.0.1",
+    "@eslint/markdown": "^7.5.1",
+    "@mikinho/autover": "^2.0.1",
+    "@stylistic/stylelint-plugin": "^5.0.1",
+    "eslint": "^10.0.3",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.5",
+    "eslint-plugin-simple-import-sort": "^12.1.1",
+    "globals": "^17.4.0",
+    "prettier": "^3.8.1",
+    "rimraf": "^6.1.3"
+  }
+}
