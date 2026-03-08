@@ -13,13 +13,26 @@ import { hideBin } from "yargs/helpers";
 
 import { lintContent } from "./src/linter.js";
 
-const colors = {
+const ansiColors = {
     red: (text) => `\x1b[31m${text}\x1b[0m`,
     green: (text) => `\x1b[32m${text}\x1b[0m`,
     cyan: (text) => `\x1b[36m${text}\x1b[0m`,
     gray: (text) => `\x1b[90m${text}\x1b[0m`,
     bold: (text) => `\x1b[1m${text}\x1b[0m`,
 };
+
+function createColors(enabled) {
+    if (!enabled) {
+        return {
+            red: (text) => text,
+            green: (text) => text,
+            cyan: (text) => text,
+            gray: (text) => text,
+            bold: (text) => text,
+        };
+    }
+    return ansiColors;
+}
 
 const argv = yargs(hideBin(process.argv))
     .scriptName("sqrl-lint")
@@ -37,19 +50,152 @@ const argv = yargs(hideBin(process.argv))
         type: "boolean",
         description: "Automatically fix formatting errors",
     })
+    .option("report", {
+        type: "string",
+        choices: ["text", "json"],
+        default: "text",
+        description: "Output format",
+    })
+    .option("color", {
+        type: "boolean",
+        default: true,
+        description: "Enable ANSI color output for text reports",
+    })
     .help()
     .parse();
 
 async function run() {
     const startTime = performance.now();
+    const useJsonReport = argv.report === "json";
+    const colors = createColors(argv.color && !useJsonReport);
     const globs = argv.globs;
+
+    const results = [];
+
+    function exitWithReport({
+        filesMatched,
+        fixCount,
+        lintErrorCount,
+        processingErrorCount,
+        durationMs,
+    }) {
+        const success = processingErrorCount === 0 && (argv.fix ? true : lintErrorCount === 0);
+
+        if (useJsonReport) {
+            console.log(
+                JSON.stringify(
+                    {
+                        mode: argv.fix ? "fix" : "check",
+                        success,
+                        filesMatched,
+                        fixedFiles: fixCount,
+                        lintErrors: lintErrorCount,
+                        processingErrors: processingErrorCount,
+                        durationMs,
+                        results,
+                    },
+                    null,
+                    4,
+                ),
+            );
+            return process.exit(success ? 0 : 1);
+        }
+
+        if (argv.fix) {
+            if (processingErrorCount > 0) {
+                console.error(
+                    colors.red(
+                        `\nSquirrelly Syntax Audit Failed: Encountered errors while processing ${processingErrorCount} files in ${durationMs}ms.`,
+                    ),
+                );
+                return process.exit(1);
+            }
+            console.log(
+                colors.green(
+                    `\nSquirrelly Syntax Audit Complete: Fixed ${fixCount} files in ${colors.bold(durationMs + "ms")}.`,
+                ),
+            );
+            return process.exit(0);
+        }
+
+        const totalErrors = lintErrorCount + processingErrorCount;
+        if (totalErrors > 0) {
+            if (processingErrorCount > 0) {
+                console.error(
+                    colors.red(
+                        `\nSquirrelly Syntax Audit Failed: Encountered errors while processing ${processingErrorCount} files in ${durationMs}ms.`,
+                    ),
+                );
+            }
+            if (lintErrorCount > 0) {
+                console.error(
+                    colors.red(
+                        `\nSquirrelly Syntax Audit Failed: ${lintErrorCount} files require formatting. Run with --fix to resolve (took ${durationMs}ms).`,
+                    ),
+                );
+            }
+            return process.exit(1);
+        }
+
+        console.log(
+            colors.green(
+                `\nSquirrelly Syntax Audit Passed: All files are formatted correctly (${colors.bold(durationMs + "ms")}).`,
+            ),
+        );
+        return process.exit(0);
+    }
+
     if (!globs || globs.length === 0) {
+        if (useJsonReport) {
+            console.log(
+                JSON.stringify(
+                    {
+                        mode: argv.fix ? "fix" : "check",
+                        success: false,
+                        filesMatched: 0,
+                        fixedFiles: 0,
+                        lintErrors: 0,
+                        processingErrors: 1,
+                        durationMs: Math.round(performance.now() - startTime),
+                        results: [
+                            {
+                                status: "error",
+                                error: "Please specify at least one glob pattern.",
+                            },
+                        ],
+                    },
+                    null,
+                    4,
+                ),
+            );
+            process.exit(1);
+        }
         console.error(colors.red("Please specify at least one glob pattern."));
         process.exit(1);
     }
 
     const files = await fg(globs, { absolute: true, ignore: ["**/node_modules/**"] });
     if (files.length === 0) {
+        const durationMs = Math.round(performance.now() - startTime);
+        if (useJsonReport) {
+            console.log(
+                JSON.stringify(
+                    {
+                        mode: argv.fix ? "fix" : "check",
+                        success: true,
+                        filesMatched: 0,
+                        fixedFiles: 0,
+                        lintErrors: 0,
+                        processingErrors: 0,
+                        durationMs,
+                        results: [],
+                    },
+                    null,
+                    4,
+                ),
+            );
+            process.exit(0);
+        }
         console.log(colors.gray("No files matched the provided pattern(s)."));
         process.exit(0);
     }
@@ -66,65 +212,39 @@ async function run() {
             if (result.changed) {
                 if (argv.fix) {
                     await fs.writeFile(file, result.content);
-                    console.log(`${colors.cyan("Formatted:")} ${file}`);
+                    if (!useJsonReport) {
+                        console.log(`${colors.cyan("Formatted:")} ${file}`);
+                    }
+                    results.push({ file, status: "fixed" });
                     fixCount++;
                 } else {
-                    console.error(
-                        `${colors.red("Linting Error:")} ${file} is not formatted correctly.`,
-                    );
+                    if (!useJsonReport) {
+                        console.error(
+                            `${colors.red("Linting Error:")} ${file} is not formatted correctly.`,
+                        );
+                    }
+                    results.push({ file, status: "needs-formatting" });
                     lintErrorCount++;
                 }
             }
         } catch (err) {
-            console.error(`${colors.red("Error processing")} ${file}:`, err);
+            const errorMessage = err instanceof Error ? err.message : String(err);
+            if (!useJsonReport) {
+                console.error(`${colors.red("Error processing")} ${file}:`, err);
+            }
+            results.push({ file, status: "error", error: errorMessage });
             processingErrorCount++;
         }
     }
 
     const durationMs = Math.round(performance.now() - startTime);
-
-    if (argv.fix) {
-        if (processingErrorCount > 0) {
-            console.error(
-                colors.red(
-                    `\nSquirrelly Syntax Audit Failed: Encountered errors while processing ${processingErrorCount} files in ${durationMs}ms.`,
-                ),
-            );
-            return process.exit(1);
-        }
-        console.log(
-            colors.green(
-                `\nSquirrelly Syntax Audit Complete: Fixed ${fixCount} files in ${colors.bold(durationMs + "ms")}.`,
-            ),
-        );
-        return process.exit(0);
-    }
-
-    const totalErrors = lintErrorCount + processingErrorCount;
-    if (totalErrors > 0) {
-        if (processingErrorCount > 0) {
-            console.error(
-                colors.red(
-                    `\nSquirrelly Syntax Audit Failed: Encountered errors while processing ${processingErrorCount} files in ${durationMs}ms.`,
-                ),
-            );
-        }
-        if (lintErrorCount > 0) {
-            console.error(
-                colors.red(
-                    `\nSquirrelly Syntax Audit Failed: ${lintErrorCount} files require formatting. Run with --fix to resolve (took ${durationMs}ms).`,
-                ),
-            );
-        }
-        return process.exit(1);
-    }
-
-    console.log(
-        colors.green(
-            `\nSquirrelly Syntax Audit Passed: All files are formatted correctly (${colors.bold(durationMs + "ms")}).`,
-        ),
-    );
-    process.exit(0);
+    return exitWithReport({
+        filesMatched: files.length,
+        fixCount,
+        lintErrorCount,
+        processingErrorCount,
+        durationMs,
+    });
 }
 
 run().catch((err) => {

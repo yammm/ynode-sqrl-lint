@@ -62,3 +62,44 @@ test(
         }
     },
 );
+
+test("check mode supports --no-color output", () => {
+    const dir = makeTempDir();
+    const file = path.join(dir, "sample.sqrl");
+    try {
+        writeFileSync(file, "{{foo}}", "utf8");
+        const result = runCli([file, "--no-color"]);
+        assert.strictEqual(result.status, 1);
+        assert.strictEqual(result.stderr.includes(String.fromCharCode(27)), false);
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
+});
+
+test("check mode supports --report json output", () => {
+    const dir = makeTempDir();
+    const file = path.join(dir, "sample.sqrl");
+    try {
+        writeFileSync(file, "{{foo}}", "utf8");
+        const result = runCli([file, "--report", "json"]);
+        assert.strictEqual(result.status, 1);
+        assert.strictEqual(result.stderr, "");
+
+        const payload = JSON.parse(result.stdout);
+        assert.strictEqual(payload.mode, "check");
+        assert.strictEqual(payload.success, false);
+        assert.strictEqual(payload.filesMatched, 1);
+        assert.strictEqual(payload.fixedFiles, 0);
+        assert.strictEqual(payload.lintErrors, 1);
+        assert.strictEqual(payload.processingErrors, 0);
+        assert.ok(Array.isArray(payload.results));
+        assert.deepStrictEqual(payload.results, [
+            {
+                file,
+                status: "needs-formatting",
+            },
+        ]);
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
+});

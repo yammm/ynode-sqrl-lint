@@ -1,5 +1,9 @@
 # @ynode/sqrl-lint
 
+Copyright (c) 2026 Michael Welter <me@mikinho.com>
+
+[![npm version](https://img.shields.io/npm/v/@ynode/sqrl-lint.svg)](https://www.npmjs.com/package/@ynode/sqrl-lint) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 A dedicated, lightning-fast regex-based linter and formatter for Squirrelly (`.sqrl`) templates, built specifically for the `@ynode` Fastify ecosystem.
 
 ## Features
@@ -36,6 +40,22 @@ npx sqrl-lint "src/**/*.sqrl" --fix
 ```
 
 Automatically targets syntax violations and corrects the text natively. The process exits with code `0`.
+
+### JSON Reporting
+
+```bash
+npx sqrl-lint "src/**/*.sqrl" --report json
+```
+
+Emits a machine-readable JSON summary to `stdout`, suitable for CI/log parsers.
+
+### Disable ANSI Colors
+
+```bash
+npx sqrl-lint "src/**/*.sqrl" --no-color
+```
+
+Disables ANSI color styling in text output.
 
 ## Configuration in `package.json`
 
