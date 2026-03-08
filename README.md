@@ -6,6 +6,8 @@ A dedicated, lightning-fast AST regex parser and formatter for Squirrelly (`.sqr
 
 - **Strict Formatting:** Enforces consistent spacing for helpers (`{{@`, `{{#`), base brackets (`{{`, `}}`), raw outputs (`{{{`, `}}}`), and block closures (`{{/`).
 - **Read-Only Linters:** Fails CI pipelines seamlessly by returning exit code `1` when files violate spacing norms.
+- **Lightning Fast:** Analyzes and natively formats files in sub-millisecond per-file times, with CLI timing metrics built-in.
+- **Quality of Life:** Automatically ignores `node_modules` by default and presents beautiful, colorized error logs and success reports.
 - **Auto-Repair:** The `--fix` option seamlessly rewrites dirty files back to pristine format natively.
 - **Fast-Glob Powered:** Built-in `fast-glob` processing natively supports arbitrary inclusion and exclusion targeting.
 
