@@ -6,12 +6,16 @@
  */
 
 import fs from "node:fs/promises";
+import { createRequire } from "node:module";
 
 import fg from "fast-glob";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 
 import { lintContent } from "./src/linter.js";
+
+const require = createRequire(import.meta.url);
+const { version } = require("./package.json");
 
 const ansiColors = {
     red: (text) => `\x1b[31m${text}\x1b[0m`,
@@ -147,6 +151,7 @@ const argv = yargs(hideBin(process.argv))
         default: 1,
         description: "Number of files to process in parallel (minimum 1)",
     })
+    .version(version)
     .help()
     .parse();
 
