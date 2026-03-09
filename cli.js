@@ -7,6 +7,7 @@
 
 import fs from "node:fs/promises";
 import { createRequire } from "node:module";
+import os from "node:os";
 
 import fg from "fast-glob";
 import yargs from "yargs";
@@ -16,6 +17,9 @@ import { lintContent } from "./src/linter.js";
 
 const require = createRequire(import.meta.url);
 const { version } = require("./package.json");
+
+/** Maximum parallelism: 2× the available CPU threads. */
+const maxParallelism = (os.availableParallelism?.() ?? os.cpus().length) * 2;
 
 const ansiColors = {
     red: (text) => `\x1b[31m${text}\x1b[0m`,
@@ -144,12 +148,18 @@ const argv = yargs(hideBin(process.argv))
     .option("diff", {
         alias: "d",
         type: "boolean",
+        default: true,
         description: "Show a unified diff for files that need formatting (check mode only)",
+    })
+    .option("quiet", {
+        alias: "q",
+        type: "boolean",
+        description: "Suppress all output; only the exit code indicates pass (0) or fail (1/2)",
     })
     .option("concurrency", {
         type: "number",
         default: 1,
-        description: "Number of files to process in parallel (minimum 1)",
+        description: `Number of files to process in parallel (1–${maxParallelism})`,
     })
     .version(version)
     .help()
@@ -158,11 +168,19 @@ const argv = yargs(hideBin(process.argv))
 async function run() {
     const startTime = performance.now();
     const useJsonReport = argv.report === "json";
-    const colors = createColors(argv.color && !useJsonReport);
+    const quiet = argv.quiet;
+    const colors = createColors(argv.color && !useJsonReport && !quiet);
     const globs = argv.globs;
     const concurrency = Number(argv.concurrency);
 
     const results = [];
+
+    /**
+     * Exit codes:
+     *   0 – success (all files clean, or all files fixed)
+     *   1 – lint failure (one or more files need formatting)
+     *   2 – operational error (I/O failures, invalid arguments, etc.)
+     */
 
     function emitConfigurationError(message) {
         if (useJsonReport) {
@@ -188,11 +206,10 @@ async function run() {
                     4,
                 ),
             );
-            return process.exit(1);
+        } else if (!quiet) {
+            console.error(colors.red(message));
         }
-
-        console.error(colors.red(message));
-        process.exit(1);
+        process.exitCode = 2;
     }
 
     function exitWithReport({ filesMatched, fixCount, lintErrorCount, processingErrorCount, durationMs }) {
@@ -216,7 +233,13 @@ async function run() {
                     4,
                 ),
             );
-            return process.exit(success ? 0 : 1);
+            process.exitCode = processingErrorCount > 0 ? 2 : success ? 0 : 1;
+            return;
+        }
+
+        if (quiet) {
+            process.exitCode = processingErrorCount > 0 ? 2 : success ? 0 : 1;
+            return;
         }
 
         if (argv.fix) {
@@ -226,49 +249,68 @@ async function run() {
                         `\nSquirrelly Syntax Audit Failed: Encountered errors while processing ${processingErrorCount} files in ${durationMs}ms.`,
                     ),
                 );
-                return process.exit(1);
+                process.exitCode = 2;
+                return;
             }
             console.log(
                 colors.green(
                     `\nSquirrelly Syntax Audit Complete: Fixed ${fixCount} files in ${colors.bold(durationMs + "ms")}.`,
                 ),
             );
-            return process.exit(0);
+            return;
         }
 
-        const totalErrors = lintErrorCount + processingErrorCount;
-        if (totalErrors > 0) {
-            if (processingErrorCount > 0) {
-                console.error(
-                    colors.red(
-                        `\nSquirrelly Syntax Audit Failed: Encountered errors while processing ${processingErrorCount} files in ${durationMs}ms.`,
-                    ),
-                );
-            }
-            if (lintErrorCount > 0) {
-                console.error(
-                    colors.red(
-                        `\nSquirrelly Syntax Audit Failed: ${lintErrorCount} files require formatting. Run with --fix to resolve (took ${durationMs}ms).`,
-                    ),
-                );
-            }
-            return process.exit(1);
+        if (processingErrorCount > 0) {
+            console.error(
+                colors.red(
+                    `\nSquirrelly Syntax Audit Failed: Encountered errors while processing ${processingErrorCount} files in ${durationMs}ms.`,
+                ),
+            );
+            process.exitCode = 2;
+        }
+        if (lintErrorCount > 0) {
+            console.error(
+                colors.red(
+                    `\nSquirrelly Syntax Audit Failed: ${lintErrorCount} files require formatting. Run with --fix to resolve (took ${durationMs}ms).`,
+                ),
+            );
+            process.exitCode = process.exitCode === 2 ? 2 : 1;
+            return;
         }
 
-        console.log(
-            colors.green(
-                `\nSquirrelly Syntax Audit Passed: All files are formatted correctly (${colors.bold(durationMs + "ms")}).`,
-            ),
-        );
-        return process.exit(0);
+        if (!processingErrorCount) {
+            console.log(
+                colors.green(
+                    `\nSquirrelly Syntax Audit Passed: All files are formatted correctly (${colors.bold(durationMs + "ms")}).`,
+                ),
+            );
+        }
     }
 
     if (!globs || globs.length === 0) {
         emitConfigurationError("Please specify at least one glob pattern.");
+        return;
     }
 
     if (!Number.isInteger(concurrency) || concurrency < 1) {
         emitConfigurationError("Invalid `--concurrency` value. Use an integer >= 1.");
+        return;
+    }
+
+    if (concurrency > maxParallelism) {
+        emitConfigurationError(
+            `Invalid \`--concurrency\` value. Maximum is ${maxParallelism} (2\u00d7 available parallelism).`,
+        );
+        return;
+    }
+
+    const cpuCount = os.availableParallelism?.() ?? os.cpus().length;
+    if (concurrency > cpuCount && !quiet) {
+        console.error(
+            colors.gray(
+                `Warning: --concurrency ${concurrency} exceeds available parallelism (${cpuCount}). Performance may degrade.`,
+            ),
+        );
     }
 
     const files = await fg(globs, { absolute: true, ignore: ["**/node_modules/**"] });
@@ -292,10 +334,10 @@ async function run() {
                     4,
                 ),
             );
-            return process.exit(0);
+        } else if (!quiet) {
+            console.log(colors.gray("No files matched the provided pattern(s)."));
         }
-        console.log(colors.gray("No files matched the provided pattern(s)."));
-        process.exit(0);
+        return;
     }
 
     const fileResults = new Array(files.length);
@@ -364,7 +406,7 @@ async function run() {
         if (result.status === "fixed") {
             fixCount++;
             results.push({ file: result.file, status: result.status });
-            if (!useJsonReport) {
+            if (!useJsonReport && !quiet) {
                 console.log(`${colors.cyan("Formatted:")} ${result.file}`);
             }
             continue;
@@ -374,13 +416,21 @@ async function run() {
             lintErrorCount++;
             const entry = { file: result.file, status: result.status };
             if (argv.diff && result.originalContent && result.formattedContent) {
-                const noColors = createColors(false);
-                entry.diff = createDiff(result.file, result.originalContent, result.formattedContent, noColors);
+                const plainDiff = createDiff(
+                    result.file,
+                    result.originalContent,
+                    result.formattedContent,
+                    createColors(false),
+                );
+                if (plainDiff) {
+                    entry.diff = plainDiff;
+                }
             }
             results.push(entry);
-            if (!useJsonReport) {
+            if (!useJsonReport && !quiet) {
                 console.error(`${colors.red("Linting Error:")} ${result.file} is not formatted correctly.`);
                 if (entry.diff) {
+                    // Re-render with colors for terminal output.
                     console.error(createDiff(result.file, result.originalContent, result.formattedContent, colors));
                     console.error("");
                 }
@@ -390,7 +440,7 @@ async function run() {
 
         processingErrorCount++;
         results.push({ file: result.file, status: result.status, error: result.error });
-        if (!useJsonReport) {
+        if (!useJsonReport && !quiet) {
             console.error(`${colors.red("Error processing")} ${result.file}: ${result.error}`);
         }
     }
@@ -407,5 +457,5 @@ async function run() {
 
 run().catch((err) => {
     console.error(err);
-    process.exit(1);
+    process.exitCode = 2;
 });

@@ -1,0 +1,6 @@
+{{@extends("base")}}
+{{#if(show)}}
+    <p>{{name}}</p>
+    <p>{{{rawHtml}}}</p>
+    {{@widget()/}}
+{{/if}}

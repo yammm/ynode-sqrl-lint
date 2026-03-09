@@ -22,7 +22,7 @@ test("check mode exits 1 when formatting is required", () => {
     const file = path.join(dir, "sample.sqrl");
     try {
         writeFileSync(file, "{{foo}}", "utf8");
-        const result = runCli([file]);
+        const result = runCli([file, "--no-color"]);
         assert.strictEqual(result.status, 1);
         assert.match(result.stderr, /not formatted correctly/);
     } finally {
@@ -44,14 +44,14 @@ test("fix mode rewrites files and exits 0", () => {
     }
 });
 
-test("fix mode exits 1 when a file cannot be processed", { skip: process.platform === "win32" }, () => {
+test("fix mode exits 2 when a file cannot be processed", { skip: process.platform === "win32" }, () => {
     const dir = makeTempDir();
     const file = path.join(dir, "locked.sqrl");
     try {
         writeFileSync(file, "{{foo}}", "utf8");
         chmodSync(file, 0o000);
         const result = runCli([file, "--fix"]);
-        assert.strictEqual(result.status, 1);
+        assert.strictEqual(result.status, 2);
         assert.match(result.stderr, /Encountered errors while processing 1 files/);
     } finally {
         chmodSync(file, 0o600);
@@ -90,12 +90,11 @@ test("check mode supports --report json output", () => {
         assert.strictEqual(payload.lintErrors, 1);
         assert.strictEqual(payload.processingErrors, 0);
         assert.ok(Array.isArray(payload.results));
-        assert.deepStrictEqual(payload.results, [
-            {
-                file,
-                status: "needs-formatting",
-            },
-        ]);
+        assert.strictEqual(payload.results.length, 1);
+        assert.strictEqual(payload.results[0].file, file);
+        assert.strictEqual(payload.results[0].status, "needs-formatting");
+        // --diff is on by default, so diff field should be present
+        assert.ok(typeof payload.results[0].diff === "string", "diff field should be present by default");
     } finally {
         rmSync(dir, { recursive: true, force: true });
     }
@@ -121,14 +120,27 @@ test("fix mode supports --concurrency for parallel file processing", () => {
     }
 });
 
-test("invalid --concurrency values fail fast", () => {
+test("invalid --concurrency values exit 2", () => {
     const dir = makeTempDir();
     const file = path.join(dir, "sample.sqrl");
     try {
         writeFileSync(file, "{{foo}}", "utf8");
         const result = runCli([file, "--concurrency", "0"]);
-        assert.strictEqual(result.status, 1);
+        assert.strictEqual(result.status, 2);
         assert.match(result.stderr, /Invalid `--concurrency` value/);
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
+});
+
+test("--concurrency above cap exits 2", () => {
+    const dir = makeTempDir();
+    const file = path.join(dir, "sample.sqrl");
+    try {
+        writeFileSync(file, "{{foo}}", "utf8");
+        const result = runCli([file, "--concurrency", "99999"]);
+        assert.strictEqual(result.status, 2);
+        assert.match(result.stderr, /Maximum is/);
     } finally {
         rmSync(dir, { recursive: true, force: true });
     }
@@ -145,6 +157,35 @@ test("check mode --diff shows unified diff output", () => {
         assert.match(result.stderr, /\+\+\+/);
         assert.match(result.stderr, /-\{\{foo\}\}/);
         assert.match(result.stderr, /\+\{\{ foo \}\}/);
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
+});
+
+test("--no-diff suppresses diff output", () => {
+    const dir = makeTempDir();
+    const file = path.join(dir, "sample.sqrl");
+    try {
+        writeFileSync(file, "{{foo}}", "utf8");
+        const result = runCli([file, "--no-diff", "--no-color"]);
+        assert.strictEqual(result.status, 1);
+        assert.match(result.stderr, /not formatted correctly/);
+        assert.ok(!result.stderr.includes("---"), "should not contain diff header");
+        assert.ok(!result.stderr.includes("+++"), "should not contain diff header");
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
+});
+
+test("--no-diff excludes diff field from JSON report", () => {
+    const dir = makeTempDir();
+    const file = path.join(dir, "sample.sqrl");
+    try {
+        writeFileSync(file, "{{foo}}", "utf8");
+        const result = runCli([file, "--report", "json", "--no-diff"]);
+        assert.strictEqual(result.status, 1);
+        const payload = JSON.parse(result.stdout);
+        assert.strictEqual(payload.results[0].diff, undefined, "diff field should not be present with --no-diff");
     } finally {
         rmSync(dir, { recursive: true, force: true });
     }
@@ -176,7 +217,54 @@ test("--report json --diff includes diff field in results", () => {
         assert.ok(typeof payload.results[0].diff === "string", "diff field should be a string");
         assert.ok(payload.results[0].diff.includes("-{{foo}}"), "diff should show removed line");
         assert.ok(payload.results[0].diff.includes("+{{ foo }}"), "diff should show added line");
+        // JSON diff should not contain ANSI escape codes
+        assert.strictEqual(payload.results[0].diff.includes("\x1b["), false, "diff should not contain ANSI codes");
     } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
+});
+
+test("--quiet suppresses all output in check mode", () => {
+    const dir = makeTempDir();
+    const file = path.join(dir, "sample.sqrl");
+    try {
+        writeFileSync(file, "{{foo}}", "utf8");
+        const result = runCli([file, "--quiet"]);
+        assert.strictEqual(result.status, 1);
+        assert.strictEqual(result.stdout, "");
+        assert.strictEqual(result.stderr, "");
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
+});
+
+test("--quiet suppresses all output in fix mode", () => {
+    const dir = makeTempDir();
+    const file = path.join(dir, "sample.sqrl");
+    try {
+        writeFileSync(file, "{{foo}}", "utf8");
+        const result = runCli([file, "--fix", "--quiet"]);
+        assert.strictEqual(result.status, 0);
+        assert.strictEqual(result.stdout, "");
+        assert.strictEqual(result.stderr, "");
+        assert.strictEqual(readFileSync(file, "utf8"), "{{ foo }}");
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
+});
+
+test("processing error exits 2 not 1", { skip: process.platform === "win32" }, () => {
+    const dir = makeTempDir();
+    const file = path.join(dir, "locked.sqrl");
+    try {
+        writeFileSync(file, "{{foo}}", "utf8");
+        chmodSync(file, 0o000);
+        const result = runCli([file, "--report", "json"]);
+        assert.strictEqual(result.status, 2);
+        const payload = JSON.parse(result.stdout);
+        assert.strictEqual(payload.processingErrors, 1);
+    } finally {
+        chmodSync(file, 0o600);
         rmSync(dir, { recursive: true, force: true });
     }
 });

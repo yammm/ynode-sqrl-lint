@@ -38,6 +38,7 @@ npx sqrl-lint "src/**/*.sqrl"
 ```
 
 If any files are formatted improperly, an error will be logged to `stderr` and the process will exit with code `1`.
+Processing errors (I/O failures, invalid arguments) exit with code `2`.
 
 ### Auto-Fix Formatting
 
@@ -78,6 +79,42 @@ npx sqrl-lint "src/**/*.sqrl" --fix --concurrency 4
 ```
 
 Processes files with bounded parallelism for faster runs on large repositories.
+
+### Quiet Mode
+
+```bash
+npx sqrl-lint "src/**/*.sqrl" --quiet
+```
+
+Suppresses all output; only the exit code indicates the result (0 = pass, 1 = lint failure, 2 = error).
+
+## Formatting Rules
+
+The linter enforces consistent spacing inside Squirrelly tag boundaries. Rules are applied in order; the first match
+wins.
+
+| Tag Type            | Before               | After                  |
+| ------------------- | -------------------- | ---------------------- |
+| Helper / Macro open | `{{@extends()}}`     | `{{@ extends() }}`     |
+| Helper / Macro open | `{{#if(user)}}`      | `{{# if(user) }}`      |
+| Self-closing helper | `{{@partial("x")/}}` | `{{@ partial("x") /}}` |
+| Block close         | `{{/if}}`            | `{{/ if }}`            |
+| Expression          | `{{name}}`           | `{{ name }}`           |
+| Raw output (triple) | `{{{rawHtml}}}`      | `{{{ rawHtml }}}`      |
+
+Content outside `{{ ... }}` boundaries (HTML, CSS, JS) is never modified.
+
+## Prettier Integration
+
+The package ships a Prettier plugin so you can format `.sqrl` files alongside the rest of your codebase:
+
+```json
+{
+    "plugins": ["@ynode/sqrl-lint/prettier"]
+}
+```
+
+Once configured, `prettier --write "**/*.sqrl"` will apply the same tag-spacing rules used by the CLI.
 
 ## Configuration in `package.json`
 
