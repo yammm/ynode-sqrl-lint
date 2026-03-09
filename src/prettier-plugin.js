@@ -17,7 +17,7 @@ export const languages = [
 
 /**
  * Defines the parsers for the Prettier plugin.
- * The custom parser intercepts the text, passes it through the regex-based linter,
+ * The custom parser intercepts the text, passes it through the tag-aware linter,
  * and returns a pseudo-AST node.
  *
  * @type {Record<string, Object>}
@@ -31,8 +31,8 @@ export const parsers = {
          * @returns {object} The parsed AST node.
          */
         parse: (text) => {
-            // Our linter is regex-based and doesn't generate a traditional AST.
-            // We just return the formatted string wrapped in a pseudo-AST node.
+            // The linter normalises tag spacing but doesn't produce a traditional AST.
+            // We return the formatted string wrapped in a pseudo-AST node.
             const result = lintContent(text);
             return {
                 type: "root",

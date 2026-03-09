@@ -2,16 +2,22 @@
 
 Copyright (c) 2026 Michael Welter <me@mikinho.com>
 
-[![npm version](https://img.shields.io/npm/v/@ynode/sqrl-lint.svg)](https://www.npmjs.com/package/@ynode/sqrl-lint) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![npm version](https://img.shields.io/npm/v/@ynode/sqrl-lint.svg)](https://www.npmjs.com/package/@ynode/sqrl-lint)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A dedicated, lightning-fast regex-based linter and formatter for Squirrelly (`.sqrl`) templates, built specifically for the `@ynode` Fastify ecosystem.
+A dedicated, lightning-fast linter and formatter for Squirrelly (`.sqrl`) templates, built specifically for the `@ynode`
+Fastify ecosystem. Uses a tag-aware scanner to normalise spacing only inside `{{ ... }}` boundaries, leaving surrounding
+HTML, CSS, and JS untouched.
 
 ## Features
 
-- **Strict Formatting:** Enforces consistent spacing for helpers (`{{@`, `{{#`), base brackets (`{{`, `}}`), raw outputs (`{{{`, `}}}`), and block closures (`{{/`).
+- **Strict Formatting:** Enforces consistent spacing for helpers (`{{@`, `{{#`), base brackets (`{{`, `}}`), raw outputs
+  (`{{{`, `}}}`), and block closures (`{{/`).
 - **Read-Only Linters:** Fails CI pipelines seamlessly by returning exit code `1` when files violate spacing norms.
-- **Lightning Fast:** Analyzes and natively formats files in sub-millisecond per-file times, with CLI timing metrics built-in.
-- **Quality of Life:** Automatically ignores `node_modules` by default and presents beautiful, colorized error logs and success reports.
+- **Lightning Fast:** Analyzes and natively formats files in sub-millisecond per-file times, with CLI timing metrics
+  built-in.
+- **Quality of Life:** Automatically ignores `node_modules` by default and presents beautiful, colorized error logs and
+  success reports.
 - **Auto-Repair:** The `--fix` option seamlessly rewrites dirty files back to pristine format natively.
 - **Fast-Glob Powered:** Built-in `fast-glob` processing natively supports arbitrary inclusion and exclusion targeting.
 
@@ -57,6 +63,14 @@ npx sqrl-lint "src/**/*.sqrl" --no-color
 
 Disables ANSI color styling in text output.
 
+### Show Diffs (Check Mode)
+
+```bash
+npx sqrl-lint "src/**/*.sqrl" --diff
+```
+
+Shows a unified diff for each file that needs formatting, making CI failures actionable.
+
 ### Parallel Processing
 
 ```bash
@@ -67,7 +81,8 @@ Processes files with bounded parallelism for faster runs on large repositories.
 
 ## Configuration in `package.json`
 
-Because this is a standard ecosystem plugin, you can easily wire it into your `@ynode` `lint:guardrails` group alongside CSS and HTML linting:
+Because this is a standard ecosystem plugin, you can easily wire it into your `@ynode` `lint:guardrails` group alongside
+CSS and HTML linting:
 
 ```json
 "scripts": {
