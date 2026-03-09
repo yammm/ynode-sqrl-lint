@@ -81,26 +81,31 @@ function createDiff(filePath, original, formatted, colors, contextLines = 3) {
         const ctxStart = Math.max(0, start - contextLines);
         const ctxEnd = Math.min(maxLen - 1, end + contextLines);
 
-        output.push(
-            colors.cyan(
-                `@@ -${ctxStart + 1},${Math.min(oldLines.length, ctxEnd + 1) - ctxStart} +${ctxStart + 1},${Math.min(newLines.length, ctxEnd + 1) - ctxStart} @@`,
-            ),
-        );
-
+        // Count old-side and new-side lines independently.
+        let oldCount = 0;
+        let newCount = 0;
+        const hunkLines = [];
         for (let i = ctxStart; i <= ctxEnd; i++) {
             const oldLine = oldLines[i] ?? "";
             const newLine = newLines[i] ?? "";
             if (oldLine === newLine) {
-                output.push(` ${oldLine}`);
+                hunkLines.push(` ${oldLine}`);
+                oldCount++;
+                newCount++;
             } else {
                 if (i < oldLines.length) {
-                    output.push(colors.red(`-${oldLine}`));
+                    hunkLines.push(colors.red(`-${oldLine}`));
+                    oldCount++;
                 }
                 if (i < newLines.length) {
-                    output.push(colors.green(`+${newLine}`));
+                    hunkLines.push(colors.green(`+${newLine}`));
+                    newCount++;
                 }
             }
         }
+
+        output.push(colors.cyan(`@@ -${ctxStart + 1},${oldCount} +${ctxStart + 1},${newCount} @@`));
+        output.push(...hunkLines);
     }
 
     return output.join("\n");
@@ -378,21 +383,67 @@ async function run() {
         if (argv.fix) {
             // Fix mode: always write the formatted content to stdout.
             process.stdout.write(lintResult.content);
+            if (useJsonReport) {
+                const durationMs = Math.round(performance.now() - startTime);
+                console.error(
+                    JSON.stringify(
+                        {
+                            mode: "fix",
+                            success: true,
+                            file: filePath,
+                            changed: lintResult.changed,
+                            durationMs,
+                        },
+                        null,
+                        4,
+                    ),
+                );
+            }
             return;
         }
 
         // Check mode: if already clean, write as-is and exit 0.
         if (!lintResult.changed) {
             process.stdout.write(lintResult.content);
+            if (useJsonReport) {
+                const durationMs = Math.round(performance.now() - startTime);
+                console.error(
+                    JSON.stringify(
+                        {
+                            mode: "check",
+                            success: true,
+                            file: filePath,
+                            changed: false,
+                            durationMs,
+                        },
+                        null,
+                        4,
+                    ),
+                );
+            }
             return;
         }
 
         // Dirty: write formatted content to stdout, exit 1.
         process.stdout.write(lintResult.content);
-        if (!quiet && !useJsonReport && argv.diff) {
+        if (useJsonReport) {
+            const durationMs = Math.round(performance.now() - startTime);
+            console.error(
+                JSON.stringify(
+                    {
+                        mode: "check",
+                        success: false,
+                        file: filePath,
+                        changed: true,
+                        durationMs,
+                    },
+                    null,
+                    4,
+                ),
+            );
+        } else if (!quiet && argv.diff) {
             console.error(createDiff(filePath, input, lintResult.content, colors));
-        }
-        if (!quiet && !useJsonReport && !argv.diff) {
+        } else if (!quiet) {
             console.error(`${colors.red("Linting Error:")} ${filePath} is not formatted correctly.`);
         }
         process.exitCode = 1;
