@@ -1,6 +1,6 @@
 {
     "name": "@ynode/sqrl-lint",
-    "version": "1.2.8+97682.v1.2.8-1-ga7e6045",
+    "version": "1.2.8+97696.v1.2.8-2-g970c71f",
     "description": "Squirrelly syntax linter and formatter",
     "type": "module",
     "main": "src/linter.js",
@@ -49,7 +49,7 @@
         "lint": "eslint ./",
         "lint:fix": "eslint ./ --fix",
         "docs": "node scripts/gen-docs.mjs",
-        "docs:clean": "rimraf docs || rmdir /s /q docs 2> NUL || true",
+        "docs:clean": "rimraf docs",
         "docs:open": "node -e \"import('node:child_process').then(m=>m.exec(process.platform==='win32'?'start docs/index.html':(process.platform==='darwin'?'open docs/index.html':'xdg-open docs/index.html')))\"",
         "changelog": "auto-changelog -p && git add CHANGELOG.md",
         "ver:preview": "npx autover --no-amend --dry-run --short",
