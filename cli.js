@@ -21,6 +21,7 @@ const { version } = require("./package.json");
 /** Maximum parallelism: 2× the available CPU threads. */
 const maxParallelism = (os.availableParallelism?.() ?? os.cpus().length) * 2;
 
+/** ANSI escape-code helpers for colorised terminal output. */
 const ansiColors = {
     red: (text) => `\x1b[31m${text}\x1b[0m`,
     green: (text) => `\x1b[32m${text}\x1b[0m`,
@@ -105,6 +106,13 @@ function createDiff(filePath, original, formatted, colors, contextLines = 3) {
     return output.join("\n");
 }
 
+/**
+ * Returns a color helper object. When disabled, all helpers pass text through
+ * unchanged so output is free of ANSI escape codes.
+ *
+ * @param {boolean} enabled - Whether ANSI colours should be applied.
+ * @returns {typeof ansiColors} Color helper functions.
+ */
 function createColors(enabled) {
     if (!enabled) {
         return {
