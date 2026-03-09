@@ -80,6 +80,16 @@ npx sqrl-lint "src/**/*.sqrl" --fix --concurrency 4
 
 Processes files with bounded parallelism for faster runs on large repositories.
 
+### Stdin / Editor Integration
+
+```bash
+cat src/views/home.sqrl | npx sqrl-lint --stdin --fix
+```
+
+Reads template content from stdin and writes the formatted output to stdout, making it ideal for editor "format on save"
+integrations, shell pipelines, and git hooks. Use `--stdin-filepath <path>` to control the filename shown in error
+messages and diffs.
+
 ### Quiet Mode
 
 ```bash

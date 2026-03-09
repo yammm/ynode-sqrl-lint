@@ -5,14 +5,30 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+/** Absolute path to the CLI entry point under test. */
 const cliPath = path.resolve(process.cwd(), "cli.js");
 
-function runCli(args) {
+/**
+ * Spawns the CLI in a child process and returns the result synchronously.
+ *
+ * @param {string[]} args - CLI arguments (flags + positional globs).
+ * @param {Object} [options] - Optional spawn overrides.
+ * @param {string} [options.input] - Data piped to the child's stdin (for `--stdin` tests).
+ * @returns {import("node:child_process").SpawnSyncReturns<string>} The captured stdout, stderr, and exit status.
+ */
+function runCli(args, { input } = {}) {
     return spawnSync(process.execPath, [cliPath, ...args], {
         encoding: "utf8",
+        input,
     });
 }
 
+/**
+ * Creates a disposable temp directory for test fixtures.
+ * Callers are responsible for cleaning up with `rmSync(dir, { recursive: true })`.
+ *
+ * @returns {string} Absolute path to the new temp directory.
+ */
 function makeTempDir() {
     return mkdtempSync(path.join(tmpdir(), "sqrl-lint-cli-test-"));
 }
@@ -267,4 +283,49 @@ test("processing error exits 2 not 1", { skip: process.platform === "win32" }, (
         chmodSync(file, 0o600);
         rmSync(dir, { recursive: true, force: true });
     }
+});
+
+// --stdin tests
+
+test("--stdin check mode writes formatted output to stdout and exits 1 for dirty input", () => {
+    const result = runCli(["--stdin", "--no-diff", "--no-color"], { input: "{{foo}}" });
+    assert.strictEqual(result.status, 1);
+    assert.strictEqual(result.stdout, "{{ foo }}");
+    assert.match(result.stderr, /not formatted correctly/);
+});
+
+test("--stdin check mode exits 0 for clean input", () => {
+    const result = runCli(["--stdin"], { input: "{{ foo }}" });
+    assert.strictEqual(result.status, 0);
+    assert.strictEqual(result.stdout, "{{ foo }}");
+    assert.strictEqual(result.stderr, "");
+});
+
+test("--stdin --fix writes formatted output to stdout and exits 0", () => {
+    const result = runCli(["--stdin", "--fix"], { input: "{{foo}}" });
+    assert.strictEqual(result.status, 0);
+    assert.strictEqual(result.stdout, "{{ foo }}");
+});
+
+test("--stdin --diff shows unified diff on stderr", () => {
+    const result = runCli(["--stdin", "--diff", "--no-color"], { input: "{{foo}}" });
+    assert.strictEqual(result.status, 1);
+    assert.strictEqual(result.stdout, "{{ foo }}");
+    assert.match(result.stderr, /---/);
+    assert.match(result.stderr, /\+\+\+/);
+});
+
+test("--stdin --stdin-filepath uses custom path in diff header", () => {
+    const result = runCli(["--stdin", "--stdin-filepath", "views/home.sqrl", "--diff", "--no-color"], {
+        input: "{{foo}}",
+    });
+    assert.strictEqual(result.status, 1);
+    assert.match(result.stderr, /views\/home\.sqrl/);
+});
+
+test("--stdin --quiet suppresses all stderr output", () => {
+    const result = runCli(["--stdin", "--quiet"], { input: "{{foo}}" });
+    assert.strictEqual(result.status, 1);
+    assert.strictEqual(result.stdout, "{{ foo }}");
+    assert.strictEqual(result.stderr, "");
 });

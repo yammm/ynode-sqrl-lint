@@ -120,7 +120,7 @@ function createColors(enabled) {
 
 const argv = yargs(hideBin(process.argv))
     .scriptName("sqrl-lint")
-    .usage("$0 <globs...>", "Lint Squirrelly templates", (yargs) => {
+    .usage("$0 [globs...]", "Lint Squirrelly templates", (yargs) => {
         yargs.positional("globs", {
             describe: 'Glob patterns of files to lint (e.g., "**/*.sqrl")',
             type: "string",
@@ -129,6 +129,16 @@ const argv = yargs(hideBin(process.argv))
     })
     .example('$0 "**/*.sqrl"', "Check all .sqrl files for formatting issues")
     .example('$0 "**/*.sqrl" --fix', "Auto-repair formatting issues natively")
+    .example("cat file.sqrl | $0 --stdin", "Read from stdin and write formatted output to stdout")
+    .option("stdin", {
+        type: "boolean",
+        description: "Read from stdin instead of file globs; formatted output is written to stdout",
+    })
+    .option("stdin-filepath", {
+        type: "string",
+        description: "Path to display in error messages and diffs when using --stdin",
+        default: "<stdin>",
+    })
     .option("fix", {
         alias: "f",
         type: "boolean",
@@ -165,6 +175,31 @@ const argv = yargs(hideBin(process.argv))
     .help()
     .parse();
 
+/**
+ * Reads all data from stdin as a UTF-8 string.
+ *
+ * Collects incoming chunks into an array and joins them once the stream
+ * ends, avoiding O(n²) string concatenation on large inputs.
+ *
+ * @returns {Promise<string>} The complete stdin content.
+ */
+function readStdin() {
+    return new Promise((resolve, reject) => {
+        const chunks = [];
+        process.stdin.setEncoding("utf8");
+        process.stdin.on("data", (chunk) => chunks.push(chunk));
+        process.stdin.on("end", () => resolve(chunks.join("")));
+        process.stdin.on("error", reject);
+    });
+}
+
+/**
+ * Main CLI entry point. Parses arguments, resolves file globs (or reads
+ * from stdin), runs the linter across all targets, and emits the
+ * appropriate report and exit code.
+ *
+ * @returns {Promise<void>}
+ */
 async function run() {
     const startTime = performance.now();
     const useJsonReport = argv.report === "json";
@@ -173,6 +208,7 @@ async function run() {
     const globs = argv.globs;
     const concurrency = Number(argv.concurrency);
 
+    /** @type {Array<{file?: string, status: string, error?: string, diff?: string}>} */
     const results = [];
 
     /**
@@ -182,6 +218,12 @@ async function run() {
      *   2 – operational error (I/O failures, invalid arguments, etc.)
      */
 
+    /**
+     * Emits an operational / configuration error via the active report
+     * format (JSON or text) and sets exit code 2.
+     *
+     * @param {string} message - Human-readable error description.
+     */
     function emitConfigurationError(message) {
         if (useJsonReport) {
             console.log(
@@ -212,6 +254,16 @@ async function run() {
         process.exitCode = 2;
     }
 
+    /**
+     * Emits the final summary (JSON or text) and sets the process exit code.
+     *
+     * @param {Object} stats - Aggregated run statistics.
+     * @param {number} stats.filesMatched - Total files resolved by the glob.
+     * @param {number} stats.fixCount - Files that were auto-fixed.
+     * @param {number} stats.lintErrorCount - Files that need formatting (check mode).
+     * @param {number} stats.processingErrorCount - Files that caused I/O or read errors.
+     * @param {number} stats.durationMs - Wall-clock elapsed time in milliseconds.
+     */
     function exitWithReport({ filesMatched, fixCount, lintErrorCount, processingErrorCount, durationMs }) {
         const success = processingErrorCount === 0 && (argv.fix ? true : lintErrorCount === 0);
 
@@ -287,6 +339,58 @@ async function run() {
         }
     }
 
+    /**
+     * Stdin mode (`--stdin`): reads template content from stdin and writes
+     * the formatted result to stdout.
+     *
+     * Designed for editor "format on save" integrations, shell pipelines,
+     * and git pre-commit hooks. Diagnostic output (diffs, error messages)
+     * is emitted to stderr so stdout remains a clean data channel.
+     *
+     * Exit codes follow the same convention as file mode:
+     *   0 – content is already clean, or `--fix` was used
+     *   1 – content needs formatting (check mode only)
+     *   2 – operational error (e.g. failed to read stdin)
+     *
+     * The `--stdin-filepath` option controls the filename displayed in
+     * diff headers and error messages (defaults to "<stdin>").
+     */
+    if (argv.stdin) {
+        const filePath = argv.stdinFilepath ?? "<stdin>";
+        let input;
+        try {
+            input = await readStdin();
+        } catch (err) {
+            emitConfigurationError(`Failed to read stdin: ${err instanceof Error ? err.message : String(err)}`);
+            return;
+        }
+
+        const lintResult = lintContent(input);
+
+        if (argv.fix) {
+            // Fix mode: always write the formatted content to stdout.
+            process.stdout.write(lintResult.content);
+            return;
+        }
+
+        // Check mode: if already clean, write as-is and exit 0.
+        if (!lintResult.changed) {
+            process.stdout.write(lintResult.content);
+            return;
+        }
+
+        // Dirty: write formatted content to stdout, exit 1.
+        process.stdout.write(lintResult.content);
+        if (!quiet && !useJsonReport && argv.diff) {
+            console.error(createDiff(filePath, input, lintResult.content, colors));
+        }
+        if (!quiet && !useJsonReport && !argv.diff) {
+            console.error(`${colors.red("Linting Error:")} ${filePath} is not formatted correctly.`);
+        }
+        process.exitCode = 1;
+        return;
+    }
+
     if (!globs || globs.length === 0) {
         emitConfigurationError("Please specify at least one glob pattern.");
         return;
@@ -343,6 +447,12 @@ async function run() {
     const fileResults = new Array(files.length);
     let nextIndex = 0;
 
+    /**
+     * Reads a single file, runs the linter, and optionally writes the fix.
+     *
+     * @param {string} file - Absolute path to the `.sqrl` file.
+     * @returns {Promise<{file: string, status: string, originalContent?: string, formattedContent?: string, error?: string}>}
+     */
     async function processOneFile(file) {
         try {
             const originalContent = await fs.readFile(file, "utf8");
