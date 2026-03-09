@@ -101,14 +101,7 @@ export function lintContent(originalContent) {
             }
 
             const inner = originalContent.slice(innerStart, closeIndex);
-            let formattedInner;
-
-            if (isTriple) {
-                // Triple-brace: simple whitespace normalisation.
-                formattedInner = " " + inner.trim() + " ";
-            } else {
-                formattedInner = formatTagContent(inner);
-            }
+            const formattedInner = formatTagContent(inner);
 
             segments.push(openDelim + formattedInner + closeDelim);
             i = closeIndex + closeLen;

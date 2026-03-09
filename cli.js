@@ -18,8 +18,11 @@ import { lintContent } from "./src/linter.js";
 const require = createRequire(import.meta.url);
 const { version } = require("./package.json");
 
+/** Available CPU threads (runtime value, computed once). */
+const cpuCount = os.availableParallelism?.() ?? os.cpus().length;
+
 /** Maximum parallelism: 2× the available CPU threads. */
-const maxParallelism = (os.availableParallelism?.() ?? os.cpus().length) * 2;
+const maxParallelism = cpuCount * 2;
 
 /** ANSI escape-code helpers for colorised terminal output. */
 const ansiColors = {
@@ -467,7 +470,6 @@ async function run() {
         return;
     }
 
-    const cpuCount = os.availableParallelism?.() ?? os.cpus().length;
     if (concurrency > cpuCount && !quiet) {
         console.error(
             colors.gray(
