@@ -1,6 +1,6 @@
 {
     "name": "@ynode/sqrl-lint",
-    "version": "1.2.0+97663.v1.2.0-6-gd430a5a",
+    "version": "1.2.0+97667.v1.2.0-7-gb46e465",
     "description": "Squirrelly syntax linter and formatter",
     "type": "module",
     "main": "src/linter.js",
@@ -30,6 +30,7 @@
     "engines": {
         "node": ">=20.0.0"
     },
+    "homepage": "https://github.com/yammm/ynode-sqrl-lint#readme",
     "repository": {
         "type": "git",
         "url": "https://github.com/yammm/ynode-sqrl-lint.git"
