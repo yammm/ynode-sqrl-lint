@@ -28,9 +28,6 @@ node_modules
 # Output of 'npm pack'
 *.tgz
 
-# Thumbnails
-._*
-
 # macOS-specific files
 .DS_Store
 ._*
