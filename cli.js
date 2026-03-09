@@ -114,6 +114,11 @@ function createDiff(filePath, original, formatted, colors, contextLines = 3) {
     return output.join("\n");
 }
 
+/** Identity passthrough — no ANSI codes applied. */
+const noColors = /** @type {typeof ansiColors} */ (
+    Object.fromEntries(Object.keys(ansiColors).map((k) => [k, (text) => text]))
+);
+
 /**
  * Returns a color helper object. When disabled, all helpers pass text through
  * unchanged so output is free of ANSI escape codes.
@@ -122,16 +127,7 @@ function createDiff(filePath, original, formatted, colors, contextLines = 3) {
  * @returns {typeof ansiColors} Color helper functions.
  */
 function createColors(enabled) {
-    if (!enabled) {
-        return {
-            red: (text) => text,
-            green: (text) => text,
-            cyan: (text) => text,
-            gray: (text) => text,
-            bold: (text) => text,
-        };
-    }
-    return ansiColors;
+    return enabled ? ansiColors : noColors;
 }
 
 const argv = yargs(hideBin(process.argv))
@@ -168,8 +164,8 @@ const argv = yargs(hideBin(process.argv))
     })
     .option("color", {
         type: "boolean",
-        default: true,
-        description: "Enable ANSI color output for text reports",
+        default: !("NO_COLOR" in process.env),
+        description: "Enable ANSI color output for text reports (respects NO_COLOR env)",
     })
     .option("diff", {
         alias: "d",
@@ -181,6 +177,11 @@ const argv = yargs(hideBin(process.argv))
         alias: "q",
         type: "boolean",
         description: "Suppress all output; only the exit code indicates pass (0) or fail (1/2)",
+    })
+    .option("ignore", {
+        type: "string",
+        array: true,
+        description: 'Additional glob patterns to ignore (e.g., "**/vendor/**")',
     })
     .option("concurrency", {
         type: "number",
@@ -478,7 +479,8 @@ async function run() {
         );
     }
 
-    const files = await fg(globs, { absolute: true, ignore: ["**/node_modules/**"] });
+    const ignore = ["**/node_modules/**", ...(argv.ignore ?? [])];
+    const files = (await fg(globs, { absolute: true, ignore })).sort();
     if (files.length === 0) {
         const durationMs = Math.round(performance.now() - startTime);
         if (useJsonReport) {
@@ -510,9 +512,11 @@ async function run() {
 
     /**
      * Reads a single file, runs the linter, and optionally writes the fix.
+     * When in check mode with `--diff`, diffs are computed here so the full
+     * file contents can be released immediately.
      *
      * @param {string} file - Absolute path to the `.sqrl` file.
-     * @returns {Promise<{file: string, status: string, originalContent?: string, formattedContent?: string, error?: string}>}
+     * @returns {Promise<{file: string, status: string, diff?: string, coloredDiff?: string, error?: string}>}
      */
     async function processOneFile(file) {
         try {
@@ -534,12 +538,19 @@ async function run() {
                 };
             }
 
-            return {
+            const result = {
                 file,
                 status: "needs-formatting",
-                originalContent,
-                formattedContent: lintResult.content,
             };
+
+            if (argv.diff) {
+                result.diff = createDiff(file, originalContent, lintResult.content, noColors);
+                if (result.diff && !useJsonReport && !quiet) {
+                    result.coloredDiff = createDiff(file, originalContent, lintResult.content, colors);
+                }
+            }
+
+            return result;
         } catch (err) {
             return {
                 file,
@@ -586,23 +597,14 @@ async function run() {
         if (result.status === "needs-formatting") {
             lintErrorCount++;
             const entry = { file: result.file, status: result.status };
-            if (argv.diff && result.originalContent && result.formattedContent) {
-                const plainDiff = createDiff(
-                    result.file,
-                    result.originalContent,
-                    result.formattedContent,
-                    createColors(false),
-                );
-                if (plainDiff) {
-                    entry.diff = plainDiff;
-                }
+            if (result.diff) {
+                entry.diff = result.diff;
             }
             results.push(entry);
             if (!useJsonReport && !quiet) {
                 console.error(`${colors.red("Linting Error:")} ${result.file} is not formatted correctly.`);
-                if (entry.diff) {
-                    // Re-render with colors for terminal output.
-                    console.error(createDiff(result.file, result.originalContent, result.formattedContent, colors));
+                if (result.coloredDiff) {
+                    console.error(result.coloredDiff);
                     console.error("");
                 }
             }

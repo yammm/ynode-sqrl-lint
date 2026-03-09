@@ -48,7 +48,8 @@ export const rules = [
  */
 function formatTagContent(inner) {
     for (const rule of rules) {
-        if (rule.pattern.test(inner)) {
+        const m = rule.pattern.exec(inner);
+        if (m) {
             return inner.replace(rule.pattern, rule.replacement);
         }
     }
