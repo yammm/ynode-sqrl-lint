@@ -92,6 +92,15 @@ CSS and HTML linting:
 }
 ```
 
+## Known Limitations
+
+### Escaped / Literal Double-Braces
+
+The tag-aware scanner treats every `{{` sequence as the start of a Squirrelly tag. There is currently no escape
+mechanism for outputting a literal `{{` or `}}` in your template without it being interpreted as tag syntax. If your
+templates need to emit raw double-brace strings (for example, Vue.js or Handlebars snippets embedded in a Squirrelly
+layout), wrap them in a Squirrelly raw helper or move the content to a partial that the linter does not process.
+
 ## License
 
 [MIT](LICENSE)

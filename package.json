@@ -1,6 +1,6 @@
 {
     "name": "@ynode/sqrl-lint",
-    "version": "1.1.0+96767.v1.1.0-6-g7859e35",
+    "version": "1.1.0+96769.v1.1.0-7-gc96058d",
     "description": "Squirrelly syntax linter and formatter",
     "type": "module",
     "main": "src/linter.js",
