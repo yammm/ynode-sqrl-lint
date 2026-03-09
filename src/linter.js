@@ -68,12 +68,20 @@ function formatTagContent(inner) {
  */
 export function lintContent(originalContent) {
     const len = originalContent.length;
-    let result = "";
+    /** @type {string[]} Collected output segments — joined once at the end. */
+    const segments = [];
     let i = 0;
+    /** Start of the current plain-text run (characters outside any tag). */
+    let plainStart = 0;
 
     while (i < len) {
         // Look for the start of a Squirrelly tag.
         if (originalContent[i] === "{" && i + 1 < len && originalContent[i + 1] === "{") {
+            // Flush any accumulated plain-text run.
+            if (i > plainStart) {
+                segments.push(originalContent.slice(plainStart, i));
+            }
+
             // Determine if this is a triple-brace tag.
             const isTriple = i + 2 < len && originalContent[i + 2] === "{";
             const openDelim = isTriple ? "{{{" : "{{";
@@ -87,7 +95,8 @@ export function lintContent(originalContent) {
 
             if (closeIndex === -1) {
                 // No matching close — emit the rest of the content as-is.
-                result += originalContent.slice(i);
+                segments.push(originalContent.slice(i));
+                plainStart = len;
                 break;
             }
 
@@ -101,13 +110,20 @@ export function lintContent(originalContent) {
                 formattedInner = formatTagContent(inner);
             }
 
-            result += openDelim + formattedInner + closeDelim;
+            segments.push(openDelim + formattedInner + closeDelim);
             i = closeIndex + closeLen;
+            plainStart = i;
         } else {
-            result += originalContent[i];
             i++;
         }
     }
+
+    // Flush any trailing plain-text content.
+    if (plainStart < len && i >= len) {
+        segments.push(originalContent.slice(plainStart));
+    }
+
+    const result = segments.join("");
 
     return {
         changed: result !== originalContent,
