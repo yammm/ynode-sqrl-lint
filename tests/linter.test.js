@@ -1,7 +1,7 @@
 import assert from "node:assert";
 import test from "node:test";
 
-import { lintContent } from "../src/linter.js";
+import { lintContent, rules } from "../src/linter.js";
 
 test("Squirrelly Linter AST Compilation suite", async (t) => {
     await t.test("Rule 1: Formats Raw Output Interpolations", () => {
@@ -61,4 +61,54 @@ test("Squirrelly Linter AST Compilation suite", async (t) => {
         const cleanVariable = lintContent("{{ foo.bar }}");
         assert.strictEqual(cleanVariable.changed, false);
     });
+});
+
+test("Tag-aware scanner does not modify content outside tags", async (t) => {
+    await t.test("leaves literal }} in plain text untouched", () => {
+        const result = lintContent("Use x}} in your code");
+        assert.strictEqual(result.changed, false);
+        assert.strictEqual(result.content, "Use x}} in your code");
+    });
+
+    await t.test("leaves CSS braces untouched", () => {
+        const result = lintContent("<style>.foo { color: red; }}</style>");
+        assert.strictEqual(result.changed, false);
+    });
+
+    await t.test("leaves JavaScript object literals untouched", () => {
+        const input = "<script>const x = {a: 1}};</script>";
+        const result = lintContent(input);
+        assert.strictEqual(result.changed, false);
+    });
+
+    await t.test("formats tags within surrounding plain text", () => {
+        const result = lintContent("Hello {{name}}, welcome!");
+        assert.strictEqual(result.content, "Hello {{ name }}, welcome!");
+        assert.strictEqual(result.changed, true);
+    });
+});
+
+test("Handles newlines inside tags consistently", () => {
+    const result = lintContent("{{\nfoo\n}}");
+    // Both sides of the inner content should be normalised
+    assert.strictEqual(result.changed, true);
+    assert.ok(result.content.startsWith("{{"));
+    assert.ok(result.content.endsWith("}}"));
+});
+
+test("Unclosed tags are passed through unchanged", () => {
+    const input = "some {{unclosed tag content";
+    const result = lintContent(input);
+    assert.strictEqual(result.content, input);
+    assert.strictEqual(result.changed, false);
+});
+
+test("Rules array is exported and well-formed", () => {
+    assert.ok(Array.isArray(rules));
+    assert.ok(rules.length >= 4);
+    for (const rule of rules) {
+        assert.ok(typeof rule.name === "string", `rule name should be a string`);
+        assert.ok(rule.pattern instanceof RegExp, `${rule.name}: pattern should be a RegExp`);
+        assert.ok(typeof rule.replacement === "string", `${rule.name}: replacement should be a string`);
+    }
 });

@@ -21,6 +21,82 @@ const ansiColors = {
     bold: (text) => `\x1b[1m${text}\x1b[0m`,
 };
 
+/**
+ * Produces a minimal unified-style diff between two strings.
+ * Only changed lines are shown, with surrounding context lines.
+ *
+ * @param {string} filePath - Path to display in the diff header.
+ * @param {string} original - The original content.
+ * @param {string} formatted - The formatted content.
+ * @param {ReturnType<typeof createColors>} colors - Color helpers.
+ * @param {number} [contextLines=3] - Number of unchanged context lines around each change.
+ * @returns {string} The formatted diff output.
+ */
+function createDiff(filePath, original, formatted, colors, contextLines = 3) {
+    const oldLines = original.split("\n");
+    const newLines = formatted.split("\n");
+    const output = [];
+
+    output.push(colors.bold(`--- a/${filePath}`));
+    output.push(colors.bold(`+++ b/${filePath}`));
+
+    // Find changed line indices.
+    const maxLen = Math.max(oldLines.length, newLines.length);
+    const changed = [];
+    for (let i = 0; i < maxLen; i++) {
+        if ((oldLines[i] ?? "") !== (newLines[i] ?? "")) {
+            changed.push(i);
+        }
+    }
+
+    if (changed.length === 0) {
+        return "";
+    }
+
+    // Group changes into hunks based on context overlap.
+    const hunks = [];
+    let hunkStart = changed[0];
+    let hunkEnd = changed[0];
+    for (let c = 1; c < changed.length; c++) {
+        if (changed[c] - hunkEnd <= contextLines * 2 + 1) {
+            hunkEnd = changed[c];
+        } else {
+            hunks.push([hunkStart, hunkEnd]);
+            hunkStart = changed[c];
+            hunkEnd = changed[c];
+        }
+    }
+    hunks.push([hunkStart, hunkEnd]);
+
+    for (const [start, end] of hunks) {
+        const ctxStart = Math.max(0, start - contextLines);
+        const ctxEnd = Math.min(maxLen - 1, end + contextLines);
+
+        output.push(
+            colors.cyan(
+                `@@ -${ctxStart + 1},${Math.min(oldLines.length, ctxEnd + 1) - ctxStart} +${ctxStart + 1},${Math.min(newLines.length, ctxEnd + 1) - ctxStart} @@`,
+            ),
+        );
+
+        for (let i = ctxStart; i <= ctxEnd; i++) {
+            const oldLine = oldLines[i] ?? "";
+            const newLine = newLines[i] ?? "";
+            if (oldLine === newLine) {
+                output.push(` ${oldLine}`);
+            } else {
+                if (i < oldLines.length) {
+                    output.push(colors.red(`-${oldLine}`));
+                }
+                if (i < newLines.length) {
+                    output.push(colors.green(`+${newLine}`));
+                }
+            }
+        }
+    }
+
+    return output.join("\n");
+}
+
 function createColors(enabled) {
     if (!enabled) {
         return {
@@ -60,6 +136,11 @@ const argv = yargs(hideBin(process.argv))
         type: "boolean",
         default: true,
         description: "Enable ANSI color output for text reports",
+    })
+    .option("diff", {
+        alias: "d",
+        type: "boolean",
+        description: "Show a unified diff for files that need formatting (check mode only)",
     })
     .option("concurrency", {
         type: "number",
@@ -109,13 +190,7 @@ async function run() {
         process.exit(1);
     }
 
-    function exitWithReport({
-        filesMatched,
-        fixCount,
-        lintErrorCount,
-        processingErrorCount,
-        durationMs,
-    }) {
+    function exitWithReport({ filesMatched, fixCount, lintErrorCount, processingErrorCount, durationMs }) {
         const success = processingErrorCount === 0 && (argv.fix ? true : lintErrorCount === 0);
 
         if (useJsonReport) {
@@ -244,6 +319,8 @@ async function run() {
             return {
                 file,
                 status: "needs-formatting",
+                originalContent,
+                formattedContent: lintResult.content,
             };
         } catch (err) {
             return {
@@ -292,9 +369,14 @@ async function run() {
             lintErrorCount++;
             results.push({ file: result.file, status: result.status });
             if (!useJsonReport) {
-                console.error(
-                    `${colors.red("Linting Error:")} ${result.file} is not formatted correctly.`,
-                );
+                console.error(`${colors.red("Linting Error:")} ${result.file} is not formatted correctly.`);
+                if (argv.diff && result.originalContent && result.formattedContent) {
+                    const diff = createDiff(result.file, result.originalContent, result.formattedContent, colors);
+                    if (diff) {
+                        console.error(diff);
+                        console.error("");
+                    }
+                }
             }
             continue;
         }

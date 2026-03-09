@@ -44,24 +44,20 @@ test("fix mode rewrites files and exits 0", () => {
     }
 });
 
-test(
-    "fix mode exits 1 when a file cannot be processed",
-    { skip: process.platform === "win32" },
-    () => {
-        const dir = makeTempDir();
-        const file = path.join(dir, "locked.sqrl");
-        try {
-            writeFileSync(file, "{{foo}}", "utf8");
-            chmodSync(file, 0o000);
-            const result = runCli([file, "--fix"]);
-            assert.strictEqual(result.status, 1);
-            assert.match(result.stderr, /Encountered errors while processing 1 files/);
-        } finally {
-            chmodSync(file, 0o600);
-            rmSync(dir, { recursive: true, force: true });
-        }
-    },
-);
+test("fix mode exits 1 when a file cannot be processed", { skip: process.platform === "win32" }, () => {
+    const dir = makeTempDir();
+    const file = path.join(dir, "locked.sqrl");
+    try {
+        writeFileSync(file, "{{foo}}", "utf8");
+        chmodSync(file, 0o000);
+        const result = runCli([file, "--fix"]);
+        assert.strictEqual(result.status, 1);
+        assert.match(result.stderr, /Encountered errors while processing 1 files/);
+    } finally {
+        chmodSync(file, 0o600);
+        rmSync(dir, { recursive: true, force: true });
+    }
+});
 
 test("check mode supports --no-color output", () => {
     const dir = makeTempDir();
@@ -133,6 +129,35 @@ test("invalid --concurrency values fail fast", () => {
         const result = runCli([file, "--concurrency", "0"]);
         assert.strictEqual(result.status, 1);
         assert.match(result.stderr, /Invalid `--concurrency` value/);
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
+});
+
+test("check mode --diff shows unified diff output", () => {
+    const dir = makeTempDir();
+    const file = path.join(dir, "sample.sqrl");
+    try {
+        writeFileSync(file, "{{foo}}", "utf8");
+        const result = runCli([file, "--diff", "--no-color"]);
+        assert.strictEqual(result.status, 1);
+        assert.match(result.stderr, /---/);
+        assert.match(result.stderr, /\+\+\+/);
+        assert.match(result.stderr, /-\{\{foo\}\}/);
+        assert.match(result.stderr, /\+\{\{ foo \}\}/);
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
+});
+
+test("check mode --diff shows nothing for clean files", () => {
+    const dir = makeTempDir();
+    const file = path.join(dir, "clean.sqrl");
+    try {
+        writeFileSync(file, "{{ foo }}", "utf8");
+        const result = runCli([file, "--diff", "--no-color"]);
+        assert.strictEqual(result.status, 0);
+        assert.ok(!result.stderr.includes("---"));
     } finally {
         rmSync(dir, { recursive: true, force: true });
     }

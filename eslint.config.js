@@ -34,13 +34,38 @@ import pluginPrettier from "eslint-plugin-prettier";
 import simpleImportSort from "eslint-plugin-simple-import-sort";
 import globals from "globals";
 
-const commonIgnores = [
-    "**/node_modules/**",
-    "**/.build/**",
-    "**/*.min.js",
-    "**/package-lock.json",
-    "**/docs/**",
-];
+const commonIgnores = ["**/node_modules/**", "**/.build/**", "**/*.min.js", "**/package-lock.json", "**/docs/**"];
+
+const sharedPlugins = {
+    js,
+    prettier: pluginPrettier,
+    "simple-import-sort": simpleImportSort,
+};
+
+const sharedRules = {
+    "no-var": "error",
+    "prefer-const": ["error", { destructuring: "all" }],
+    "no-unused-vars": ["error", { args: "none", ignoreRestSiblings: true }],
+    "no-implicit-coercion": ["warn", { allow: ["!!"] }],
+    indent: ["error", 4, { SwitchCase: 1 }],
+    semi: ["error", "always"],
+    curly: ["error", "all"],
+    "brace-style": ["error", "1tbs", { allowSingleLine: false }],
+    quotes: ["error", "double", { avoidEscape: true, allowTemplateLiterals: true }],
+    "simple-import-sort/imports": [
+        "error",
+        {
+            groups: [
+                ["^\\u0000"],
+                [`^node:`, `^(${builtinModules.join("|")})(/|$)`],
+                ["^@?\\w"],
+                ["^.*core(/|$)"],
+                ["^\\."],
+            ],
+        },
+    ],
+    "simple-import-sort/exports": "error",
+};
 
 export default defineConfig([
     {
@@ -50,76 +75,22 @@ export default defineConfig([
     {
         files: ["**/js/*.js"],
         ignores: commonIgnores,
-        plugins: {
-            js,
-            prettier: pluginPrettier,
-            "simple-import-sort": simpleImportSort,
-        },
+        plugins: sharedPlugins,
         extends: ["js/recommended"],
         languageOptions: {
             globals: { ...globals.browser, ...globals.es2024 },
         },
-        rules: {
-            "no-var": "error",
-            "prefer-const": ["error", { destructuring: "all" }],
-            "no-unused-vars": ["error", { args: "none", ignoreRestSiblings: true }],
-            "no-implicit-coercion": ["warn", { allow: ["!!"] }],
-            indent: ["error", 4, { SwitchCase: 1 }],
-            semi: ["error", "always"],
-            curly: ["error", "all"],
-            "brace-style": ["error", "1tbs", { allowSingleLine: false }],
-            quotes: ["error", "double", { avoidEscape: true, allowTemplateLiterals: true }],
-            "simple-import-sort/imports": [
-                "error",
-                {
-                    groups: [
-                        ["^\\u0000"],
-                        [`^node:`, `^(${builtinModules.join("|")})(/|$)`],
-                        ["^@?\\w"],
-                        ["^.*core(/|$)"],
-                        ["^\\."],
-                    ],
-                },
-            ],
-            "simple-import-sort/exports": "error",
-        },
+        rules: sharedRules,
     },
     {
         files: ["**/*.{js,mjs,cjs}"],
         ignores: ["**/js/*.js", ...commonIgnores],
-        plugins: {
-            js,
-            prettier: pluginPrettier,
-            "simple-import-sort": simpleImportSort,
-        },
+        plugins: sharedPlugins,
         extends: ["js/recommended"],
         languageOptions: {
             globals: { ...globals.node, ...globals.es2024 },
         },
-        rules: {
-            "no-var": "error",
-            "prefer-const": ["error", { destructuring: "all" }],
-            "no-unused-vars": ["error", { args: "none", ignoreRestSiblings: true }],
-            "no-implicit-coercion": ["warn", { allow: ["!!"] }],
-            indent: ["error", 4, { SwitchCase: 1 }],
-            semi: ["error", "always"],
-            curly: ["error", "all"],
-            "brace-style": ["error", "1tbs", { allowSingleLine: false }],
-            quotes: ["error", "double", { avoidEscape: true, allowTemplateLiterals: true }],
-            "simple-import-sort/imports": [
-                "error",
-                {
-                    groups: [
-                        ["^\\u0000"],
-                        [`^node:`, `^(${builtinModules.join("|")})(/|$)`],
-                        ["^@?\\w"],
-                        ["^.*core(/|$)"],
-                        ["^\\."],
-                    ],
-                },
-            ],
-            "simple-import-sort/exports": "error",
-        },
+        rules: sharedRules,
     },
     {
         files: ["**/*.json"],

@@ -1,6 +1,6 @@
 {
     "name": "@ynode/sqrl-lint",
-    "version": "1.0.1+96384.26322a6",
+    "version": "1.0.1+96743.595d126",
     "description": "Squirrelly syntax linter and formatter",
     "type": "module",
     "main": "src/linter.js",
@@ -10,7 +10,10 @@
             "types": "./index.d.ts",
             "default": "./src/linter.js"
         },
-        "./prettier": "./src/prettier-plugin.js"
+        "./prettier": {
+            "types": "./prettier.d.ts",
+            "default": "./src/prettier-plugin.js"
+        }
     },
     "bin": {
         "sqrl-lint": "cli.js"
