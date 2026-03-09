@@ -112,3 +112,29 @@ test("Rules array is exported and well-formed", () => {
         assert.ok(typeof rule.replacement === "string", `${rule.name}: replacement should be a string`);
     }
 });
+
+test("Formatting is idempotent across all tag types", async (t) => {
+    const inputs = [
+        "{{foo}}",
+        "{{{bar}}}",
+        "{{@extends()}}",
+        "{{# if(true) }}",
+        "{{ / each }}",
+        "{{@ custom()/}}",
+        "{{   deeply.nested.prop   }}",
+        "{{@extends()    /}}",
+        "Hello {{name}}, welcome to {{{site}}}!",
+        '<div class="{{cls}}">{{# if(x) }}{{{ raw }}}{{/ if }}</div>',
+        "plain text with no tags at all",
+        "some {{unclosed tag content",
+    ];
+
+    for (const input of inputs) {
+        await t.test(`idempotent: ${JSON.stringify(input).slice(0, 50)}`, () => {
+            const first = lintContent(input);
+            const second = lintContent(first.content);
+            assert.strictEqual(second.changed, false, `Second pass should not change output for: ${input}`);
+            assert.strictEqual(second.content, first.content);
+        });
+    }
+});
