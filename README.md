@@ -37,8 +37,8 @@ You can use the linter either manually via `npx` or wire it directly into your `
 npx sqrl-lint "src/**/*.sqrl"
 ```
 
-If any files are formatted improperly, an error will be logged to `stderr` and the process will exit with code `1`.
-Processing errors (I/O failures, invalid arguments) exit with code `2`.
+If any files are formatted improperly, an error will be logged to `stderr` and the process will exit with a non-zero
+code (see [Exit Codes](#exit-codes)).
 
 ### Auto-Fix Formatting
 
@@ -46,7 +46,7 @@ Processing errors (I/O failures, invalid arguments) exit with code `2`.
 npx sqrl-lint "src/**/*.sqrl" --fix
 ```
 
-Automatically targets syntax violations and corrects the text natively. The process exits with code `0`.
+Automatically targets syntax violations and corrects the text natively.
 
 ### JSON Reporting
 
@@ -96,7 +96,23 @@ messages and diffs.
 npx sqrl-lint "src/**/*.sqrl" --quiet
 ```
 
-Suppresses all output; only the exit code indicates the result (0 = pass, 1 = lint failure, 2 = error).
+Suppresses all output; only the exit code indicates the result.
+
+### Version
+
+```bash
+npx sqrl-lint --version
+```
+
+Prints the installed package version and exits.
+
+## Exit Codes
+
+| Code | Meaning                                                               |
+| ---- | --------------------------------------------------------------------- |
+| `0`  | All files are formatted correctly, or `--fix` completed without error |
+| `1`  | One or more files need formatting (check mode only)                   |
+| `2`  | Operational error (I/O failure, invalid arguments, permission denied) |
 
 ## Formatting Rules
 
