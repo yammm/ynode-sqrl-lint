@@ -162,3 +162,21 @@ test("check mode --diff shows nothing for clean files", () => {
         rmSync(dir, { recursive: true, force: true });
     }
 });
+
+test("--report json --diff includes diff field in results", () => {
+    const dir = makeTempDir();
+    const file = path.join(dir, "sample.sqrl");
+    try {
+        writeFileSync(file, "{{foo}}", "utf8");
+        const result = runCli([file, "--report", "json", "--diff"]);
+        assert.strictEqual(result.status, 1);
+
+        const payload = JSON.parse(result.stdout);
+        assert.strictEqual(payload.results.length, 1);
+        assert.ok(typeof payload.results[0].diff === "string", "diff field should be a string");
+        assert.ok(payload.results[0].diff.includes("-{{foo}}"), "diff should show removed line");
+        assert.ok(payload.results[0].diff.includes("+{{ foo }}"), "diff should show added line");
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
+});

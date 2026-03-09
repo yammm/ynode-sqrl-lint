@@ -372,15 +372,17 @@ async function run() {
 
         if (result.status === "needs-formatting") {
             lintErrorCount++;
-            results.push({ file: result.file, status: result.status });
+            const entry = { file: result.file, status: result.status };
+            if (argv.diff && result.originalContent && result.formattedContent) {
+                const noColors = createColors(false);
+                entry.diff = createDiff(result.file, result.originalContent, result.formattedContent, noColors);
+            }
+            results.push(entry);
             if (!useJsonReport) {
                 console.error(`${colors.red("Linting Error:")} ${result.file} is not formatted correctly.`);
-                if (argv.diff && result.originalContent && result.formattedContent) {
-                    const diff = createDiff(result.file, result.originalContent, result.formattedContent, colors);
-                    if (diff) {
-                        console.error(diff);
-                        console.error("");
-                    }
+                if (entry.diff) {
+                    console.error(createDiff(result.file, result.originalContent, result.formattedContent, colors));
+                    console.error("");
                 }
             }
             continue;
