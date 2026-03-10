@@ -38,3 +38,8 @@ Icon?
 # Example: Xcode build artifacts
 build/
 *.xcodeproj/xcuserdata/
+
+# Ignore root-level markdown except README and CONTRIBUTING
+/*.md
+!README.md
+!CONTRIBUTING.md
