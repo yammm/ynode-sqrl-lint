@@ -55,7 +55,7 @@ function createDiff(filePath, original, formatted, colors, contextLines = 3) {
     // Find changed line indices.
     const maxLen = Math.max(oldLines.length, newLines.length);
     const changed = [];
-    for (let i = 0; i < maxLen; i++) {
+    for (let i = 0; i < maxLen; ++i) {
         if ((oldLines[i] ?? "") !== (newLines[i] ?? "")) {
             changed.push(i);
         }
@@ -65,11 +65,14 @@ function createDiff(filePath, original, formatted, colors, contextLines = 3) {
         return "";
     }
 
-    // Group changes into hunks based on context overlap.
+    // Group nearby changes into unified diff hunks. Two changes merge into
+    // one hunk when the gap between them is small enough that their context
+    // windows (contextLines before + after each) would overlap or touch.
+    // Threshold: gap <= contextLines * 2 + 1.
     const hunks = [];
     let hunkStart = changed[0];
     let hunkEnd = changed[0];
-    for (let c = 1; c < changed.length; c++) {
+    for (let c = 1; c < changed.length; ++c) {
         if (changed[c] - hunkEnd <= contextLines * 2 + 1) {
             hunkEnd = changed[c];
         } else {
@@ -88,21 +91,21 @@ function createDiff(filePath, original, formatted, colors, contextLines = 3) {
         let oldCount = 0;
         let newCount = 0;
         const hunkLines = [];
-        for (let i = ctxStart; i <= ctxEnd; i++) {
+        for (let i = ctxStart; i <= ctxEnd; ++i) {
             const oldLine = oldLines[i] ?? "";
             const newLine = newLines[i] ?? "";
             if (oldLine === newLine) {
                 hunkLines.push(` ${oldLine}`);
-                oldCount++;
-                newCount++;
+                ++oldCount;
+                ++newCount;
             } else {
                 if (i < oldLines.length) {
                     hunkLines.push(colors.red(`-${oldLine}`));
-                    oldCount++;
+                    ++oldCount;
                 }
                 if (i < newLines.length) {
                     hunkLines.push(colors.green(`+${newLine}`));
-                    newCount++;
+                    ++newCount;
                 }
             }
         }
@@ -560,12 +563,15 @@ async function run() {
         }
     }
 
+    // Bounded-queue parallel processing: each worker claims the next file index
+    // then awaits its processing. The shared nextIndex mutation is safe because
+    // Node.js is single-threaded — only one worker reads/increments between awaits.
     const workerCount = Math.min(concurrency, files.length);
     await Promise.all(
         Array.from({ length: workerCount }, async () => {
             while (true) {
                 const index = nextIndex;
-                nextIndex++;
+                ++nextIndex;
 
                 if (index >= files.length) {
                     return;
@@ -586,7 +592,7 @@ async function run() {
         }
 
         if (result.status === "fixed") {
-            fixCount++;
+            ++fixCount;
             results.push({ file: result.file, status: result.status });
             if (!useJsonReport && !quiet) {
                 console.log(`${colors.cyan("Formatted:")} ${result.file}`);
@@ -595,7 +601,7 @@ async function run() {
         }
 
         if (result.status === "needs-formatting") {
-            lintErrorCount++;
+            ++lintErrorCount;
             const entry = { file: result.file, status: result.status };
             if (result.diff) {
                 entry.diff = result.diff;
@@ -611,7 +617,7 @@ async function run() {
             continue;
         }
 
-        processingErrorCount++;
+        ++processingErrorCount;
         results.push({ file: result.file, status: result.status, error: result.error });
         if (!useJsonReport && !quiet) {
             console.error(`${colors.red("Error processing")} ${result.file}: ${result.error}`);

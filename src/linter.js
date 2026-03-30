@@ -108,7 +108,7 @@ export function lintContent(originalContent) {
             i = closeIndex + closeLen;
             plainStart = i;
         } else {
-            i++;
+            ++i;
         }
     }
 
