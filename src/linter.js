@@ -69,7 +69,10 @@ function formatTagContent(inner) {
  */
 export function lintContent(originalContent) {
     const len = originalContent.length;
-    /** @type {string[]} Collected output segments — joined once at the end. */
+    /**
+     * Collected output segments — joined once at the end.
+     * @type {string[]}
+     */
     const segments = [];
     let i = 0;
     /** Start of the current plain-text run (characters outside any tag). */

@@ -56,7 +56,7 @@ export const printers = {
         /**
          * Prints the AST node back into a string.
          *
-         * @param {Object} path - The AST path being printed.
+         * @param {object} path - The AST path being printed.
          * @returns {string} The formatted string.
          */
         print: (path) => {
