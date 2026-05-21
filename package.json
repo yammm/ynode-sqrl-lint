@@ -1,6 +1,6 @@
 {
     "name": "@ynode/sqrl-lint",
-    "version": "1.4.2+202768.v1.4.2-1-gb482248",
+    "version": "1.5.0+202768.v1.4.2-2-ga42a314",
     "description": "Tag-aware linter, formatter, and Prettier plugin for Squirrelly (.sqrl) templates",
     "type": "module",
     "main": "src/linter.js",
