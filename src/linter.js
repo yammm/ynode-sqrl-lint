@@ -15,8 +15,15 @@
 export const rules = [
     {
         // Self-closing helpers/macros: {{@ name() /}}
+        //
+        // Restricted to the `@` prefix — comment tags ({{! ... }}) and
+        // block-open tags ({{# ... }}) are never self-closing, and a
+        // trailing `/` inside their content is just part of the body
+        // (most commonly the `*/` terminator of a `/* ... */` comment).
+        // The prior `[@#!]` class let `{{! /* … */ }}` backtrack the
+        // self-close slash onto the `*/` and split it.
         name: "helper-self-closing",
-        pattern: /^[ \t]*([@#!])[ \t]*(.*?)[ \t]*\/[ \t]*$/s,
+        pattern: /^[ \t]*(@)[ \t]*(.*?)[ \t]*\/[ \t]*$/s,
         replacement: "$1 $2 /",
     },
     {

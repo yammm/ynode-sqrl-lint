@@ -46,6 +46,27 @@ test("Squirrelly Linter AST Compilation suite", async (t) => {
         assert.strictEqual(messyResult.content, "{{@ proxy() /}}");
     });
 
+    await t.test("Self-closing rule does not split */ inside comment tags", () => {
+        // Regression: the [@#!] prefix class let the self-closing pattern
+        // backtrack the `/` from a `*/` block-comment terminator onto the
+        // self-close slash, turning `{{! /* … */ }}` into `{{! /* … * /}}`.
+        const input = "{{! /* This is a valid comment */ }}";
+        const result = lintContent(input);
+        assert.strictEqual(result.content, input, "comment containing */ must round-trip unchanged");
+        assert.strictEqual(result.changed, false);
+
+        // The same content with no leading space inside is also preserved.
+        const tight = "{{!/* boundary case */}}";
+        const tightResult = lintContent(tight);
+        assert.strictEqual(tightResult.content, "{{! /* boundary case */ }}");
+
+        // Block-open tags (`{{# ... }}`) also must not be treated as
+        // self-closing just because their content ends in `/`.
+        const block = "{{#if (path === '/') }}";
+        const blockResult = lintContent(block);
+        assert.strictEqual(blockResult.content, "{{# if (path === '/') }}");
+    });
+
     await t.test("Rule 6: Formats Standard End Tag Spacing", () => {
         const baseResult = lintContent("{{ name}}");
         assert.strictEqual(baseResult.changed, true);
