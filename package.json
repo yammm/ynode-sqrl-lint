@@ -1,6 +1,6 @@
 {
     "name": "@ynode/sqrl-lint",
-    "version": "1.5.0+202768.v1.4.2-2-ga42a314",
+    "version": "1.5.0+202790.v1.5.0-1-g4ed6722",
     "description": "Tag-aware linter, formatter, and Prettier plugin for Squirrelly (.sqrl) templates",
     "type": "module",
     "main": "src/linter.js",
@@ -71,16 +71,16 @@
     "devDependencies": {
         "@eslint/js": "^10.0.1",
         "@eslint/json": "^1.2.0",
-        "@eslint/markdown": "^8.0.1",
+        "@eslint/markdown": "^8.0.2",
         "@mikinho/autover": "^2.1.0",
-        "auto-changelog": "^2.5.0",
-        "eslint": "^10.1.0",
+        "auto-changelog": "^2.5.1",
+        "eslint": "^10.4.0",
         "eslint-config-prettier": "^10.1.8",
         "eslint-plugin-prettier": "^5.5.5",
-        "eslint-plugin-simple-import-sort": "^12.1.1",
-        "globals": "^17.4.0",
+        "eslint-plugin-simple-import-sort": "^13.0.0",
+        "globals": "^17.6.0",
         "jsdoc": "^4.0.5",
-        "prettier": "^3.8.1",
+        "prettier": "^3.8.3",
         "rimraf": "^6.1.3"
     }
 }
