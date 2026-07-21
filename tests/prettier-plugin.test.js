@@ -1,20 +1,23 @@
 import assert from "node:assert";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { stripVTControlCharacters } from "node:util";
 import test from "node:test";
 
 import prettier from "prettier";
 
+import { lintContent } from "../src/linter.js";
 import * as sqrlPlugin from "../src/prettier-plugin.js";
 
 const fixturesDir = path.resolve(process.cwd(), "tests", "fixtures");
 const inputPath = path.join(fixturesDir, "prettier-input.sqrl");
 const outputPath = path.join(fixturesDir, "prettier-output.sqrl");
 
-function format(text) {
+function format(text, prettierOptions = {}) {
     return prettier.format(text, {
         parser: "sqrl-parse",
         plugins: [sqrlPlugin],
+        ...prettierOptions,
     });
 }
 
@@ -63,4 +66,27 @@ test("prettier plugin all-tags fixture is idempotent", async () => {
 
     const actual = await format(expected);
     assert.strictEqual(actual, expected);
+});
+
+test("prettier defaults to the semantics-preserving logical-OR fix", async () => {
+    const actual = await format('{{ it.value || "fallback" }}');
+
+    assert.strictEqual(actual, '{{ (it.value || "fallback") }}');
+});
+
+test("prettier can opt into nullish logical-OR fixes", async () => {
+    const actual = await format('{{ it.value || "fallback" }}', {
+        sqrlLogicalOrFix: "nullish",
+    });
+
+    assert.strictEqual(actual, '{{ it.value ?? "fallback" }}');
+    assert.deepStrictEqual(lintContent(actual, { logicalOrFix: "nullish" }).diagnostics, []);
+    assert.strictEqual(await format(actual, { sqrlLogicalOrFix: "nullish" }), actual);
+});
+
+test("prettier rejects invalid logical-OR fix choices", async () => {
+    await assert.rejects(format('{{ it.value || "fallback" }}', { sqrlLogicalOrFix: "replace" }), (error) => {
+        assert.match(stripVTControlCharacters(error.message), /Invalid sqrlLogicalOrFix value/u);
+        return true;
+    });
 });

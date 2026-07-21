@@ -15,6 +15,26 @@ export const languages = [
     },
 ];
 
+/** Squirrelly-specific settings available in Prettier configuration. */
+export const options = {
+    sqrlLogicalOrFix: {
+        type: "choice",
+        category: "Squirrelly",
+        default: "parenthesize",
+        description: "Choose how exposed logical OR expressions are repaired in Squirrelly output tags.",
+        choices: [
+            {
+                value: "parenthesize",
+                description: "Parenthesize the expression and preserve JavaScript logical OR semantics.",
+            },
+            {
+                value: "nullish",
+                description: "Replace logical OR with nullish coalescing for project-preferred fallback semantics.",
+            },
+        ],
+    },
+};
+
 /**
  * Defines the parsers for the Prettier plugin.
  * The custom parser intercepts the text, passes it through the tag-aware linter,
@@ -28,12 +48,15 @@ export const parsers = {
          * Parses the raw code into an AST format.
          *
          * @param {string} text - The raw file content to format.
+         * @param {object} prettierOptions - Resolved Prettier options.
          * @returns {object} The parsed AST node.
          */
-        parse: (text) => {
+        parse: (text, prettierOptions) => {
             // The linter normalises tag spacing but doesn't produce a traditional AST.
             // We return the formatted string wrapped in a pseudo-AST node.
-            const result = lintContent(text);
+            const result = lintContent(text, {
+                logicalOrFix: prettierOptions.sqrlLogicalOrFix,
+            });
             return {
                 type: "root",
                 value: result.content,

@@ -5,12 +5,12 @@ import { lintContent, rules } from "../src/linter.js";
 
 test("Squirrelly Linter AST Compilation suite", async (t) => {
     await t.test("Rule 1: Formats Raw Output Interpolations", () => {
-        const result = lintContent("{{{data}}}");
+        const result = lintContent("{{*data}}");
         assert.strictEqual(result.changed, true);
-        assert.strictEqual(result.content, "{{{ data }}}");
+        assert.strictEqual(result.content, "{{* data }}");
 
         // Assert already-clean syntax remains unchanged
-        const clean = lintContent("{{{ data }}}");
+        const clean = lintContent("{{* data }}");
         assert.strictEqual(clean.changed, false);
     });
 
@@ -21,8 +21,8 @@ test("Squirrelly Linter AST Compilation suite", async (t) => {
         const logicResult = lintContent("{{ #if(true) }}");
         assert.strictEqual(logicResult.content, "{{# if(true) }}");
 
-        const commentResult = lintContent("{{ ! Todo }}");
-        assert.strictEqual(commentResult.content, "{{! Todo }}");
+        const executionResult = lintContent("{{!it.ready = true; }}");
+        assert.strictEqual(executionResult.content, "{{! it.ready = true; }}");
     });
 
     await t.test("Rule 3: Formats Closing block start tags", () => {
@@ -46,13 +46,14 @@ test("Squirrelly Linter AST Compilation suite", async (t) => {
         assert.strictEqual(messyResult.content, "{{@ proxy() /}}");
     });
 
-    await t.test("Self-closing rule does not split */ inside comment tags", () => {
+    await t.test("Self-closing rule does not split */ inside execution block comments", () => {
         // Regression: the [@#!] prefix class let the self-closing pattern
-        // backtrack the `/` from a `*/` block-comment terminator onto the
-        // self-close slash, turning `{{! /* … */ }}` into `{{! /* … * /}}`.
+        // backtrack the `/` from a `*/` JavaScript-comment terminator onto
+        // the self-close slash, turning `{{! /* … */ }}` into
+        // `{{! /* … * /}}`.
         const input = "{{! /* This is a valid comment */ }}";
         const result = lintContent(input);
-        assert.strictEqual(result.content, input, "comment containing */ must round-trip unchanged");
+        assert.strictEqual(result.content, input, "execution comment containing */ must round-trip unchanged");
         assert.strictEqual(result.changed, false);
 
         // The same content with no leading space inside is also preserved.
@@ -110,11 +111,85 @@ test("Tag-aware scanner does not modify content outside tags", async (t) => {
 });
 
 test("Handles newlines inside tags consistently", () => {
-    const result = lintContent("{{\nfoo\n}}");
-    // Both sides of the inner content should be normalised
-    assert.strictEqual(result.changed, true);
-    assert.ok(result.content.startsWith("{{"));
-    assert.ok(result.content.endsWith("}}"));
+    for (const input of ["{{\nfoo\n}}", "{{\r\nfoo\r\n}}"]) {
+        const result = lintContent(input);
+        assert.strictEqual(result.changed, false);
+        assert.strictEqual(result.content, input);
+        assert.ok(
+            result.content.split(/\r?\n/u).every((line) => !/[ \t]+$/u.test(line)),
+            "formatting must not introduce trailing whitespace",
+        );
+    }
+});
+
+test("Close-delimiter scanner respects nested JavaScript syntax", async (t) => {
+    const cases = [
+        ["nested object braces", "{{fmt({a:{b:1}})}}", "{{ fmt({a:{b:1}}) }}"],
+        ["double-quoted delimiter", '{{"literal }} text"}}', '{{ "literal }} text" }}'],
+        ["single-quoted delimiter", "{{'literal }} text'}}", "{{ 'literal }} text' }}"],
+        ["escaped quote delimiter", '{{"escaped \\" }} text"}}', '{{ "escaped \\" }} text" }}'],
+        ["block-comment delimiter", "{{fn(/* }} */ value)}}", "{{ fn(/* }} */ value) }}"],
+        ["line-comment delimiter", "{{fn(\n// }} ignored\nvalue\n)}}", "{{ fn(\n// }} ignored\nvalue\n) }}"],
+        ["escaped regex delimiter", "{{/\\}\\}/.test(value)}}", "{{ (/\\}\\}/.test(value)) }}"],
+        ["nested template expression", '{{`${({ value: "}}" }).value}`}}', '{{ `${({ value: "}}" }).value}` }}'],
+        ["raw-output nested braces", "{{*({a:{b:1}})}}", "{{* ({a:{b:1}}) }}"],
+    ];
+
+    for (const [name, input, expected] of cases) {
+        await t.test(name, () => {
+            const result = lintContent(input);
+            assert.strictEqual(result.content, expected);
+            assert.strictEqual(lintContent(result.content).changed, false);
+        });
+    }
+});
+
+test("Execution tags treat JavaScript block comments as opaque", () => {
+    const input = "{{! /* TODO: ignore {{name}} while disabled */ }}{{next}}";
+    const result = lintContent(input);
+    assert.strictEqual(result.content, "{{! /* TODO: ignore {{name}} while disabled */ }}{{ next }}");
+    assert.strictEqual(lintContent(result.content).changed, false);
+});
+
+test("Leading regular-expression literals are disambiguated as expression tags", () => {
+    const dirty = lintContent("{{/^admin/.test(it.role)}}");
+    assert.strictEqual(dirty.content, "{{ (/^admin/.test(it.role)) }}");
+
+    const clean = lintContent("{{ (/^admin/.test(it.role)) }}");
+    assert.strictEqual(clean.content, "{{ (/^admin/.test(it.role)) }}");
+    assert.strictEqual(clean.changed, false);
+});
+
+test("Block-close tags are not mistaken for regex literals", () => {
+    const input = "{{/if}} / literal slash after the tag";
+    assert.strictEqual(lintContent(input).content, "{{/ if }} / literal slash after the tag");
+});
+
+test("Ambiguous block-close and leading-regex tags pass through unchanged", () => {
+    for (const input of ["{{/if}}/.test(x)}}", "{{ /foo}}/ }}"]) {
+        const first = lintContent(input);
+        assert.strictEqual(first.changed, false);
+        assert.strictEqual(first.content, input);
+
+        const second = lintContent(first.content);
+        assert.strictEqual(second.changed, false);
+        assert.strictEqual(second.content, input);
+    }
+});
+
+test("Adjacent block-close tags remain unambiguous", () => {
+    const input = "{{/if}}{{/each}}";
+    const first = lintContent(input);
+    assert.strictEqual(first.content, "{{/ if }}{{/ each }}");
+
+    const second = lintContent(first.content);
+    assert.strictEqual(second.changed, false);
+    assert.strictEqual(second.content, first.content);
+});
+
+test("Empty tags normalize to one interior space", () => {
+    assert.strictEqual(lintContent("{{}}").content, "{{ }}");
+    assert.strictEqual(lintContent("{{ }}").changed, false);
 });
 
 test("Unclosed tags are passed through unchanged", () => {
@@ -137,15 +212,15 @@ test("Rules array is exported and well-formed", () => {
 test("Formatting is idempotent across all tag types", async (t) => {
     const inputs = [
         "{{foo}}",
-        "{{{bar}}}",
+        "{{*bar}}",
         "{{@extends()}}",
         "{{# if(true) }}",
         "{{ / each }}",
         "{{@ custom()/}}",
         "{{   deeply.nested.prop   }}",
         "{{@extends()    /}}",
-        "Hello {{name}}, welcome to {{{site}}}!",
-        '<div class="{{cls}}">{{# if(x) }}{{{ raw }}}{{/ if }}</div>',
+        "Hello {{name}}, welcome to {{*site}}!",
+        '<div class="{{cls}}">{{# if(x) }}{{* raw }}{{/ if }}</div>',
         "plain text with no tags at all",
         "some {{unclosed tag content",
     ];
