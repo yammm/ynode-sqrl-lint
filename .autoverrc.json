@@ -1,5 +1,6 @@
 {
     "format": "build",
+    "metadata": "timestamp",
     "workspaces": false,
     "guardUnchanged": true,
     "skipOnCI": true,
