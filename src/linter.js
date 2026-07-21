@@ -18,43 +18,45 @@ export { DEFAULT_LINT_OPTIONS } from "./config.js";
  *
  * @type {Array<{name: string, pattern: RegExp, replacement: string}>}
  */
-export const rules = [
-    {
-        // Self-closing helpers/macros: {{@ name() /}}
-        //
-        // Restricted to the `@` prefix — comment tags ({{! ... }}) and
-        // block-open tags ({{# ... }}) are never self-closing, and a
-        // trailing `/` inside their content is just part of the body
-        // (most commonly the `*/` terminator of a `/* ... */` comment).
-        // The prior `[@#!]` class let `{{! /* … */ }}` backtrack the
-        // self-close slash onto the `*/` and split it.
-        name: "helper-self-closing",
-        pattern: /^[ \t]*(@)[ \t]*(.*?)[ \t]*\/[ \t]*$/s,
-        replacement: "$1 $2 /",
-    },
-    {
-        // Helper, branch, execution, and raw-output tags.
-        name: "helper-open",
-        pattern: /^[ \t]*([@#!*])[ \t]*(.*?)[ \t]*$/s,
-        replacement: "$1 $2 ",
-    },
-    {
-        // Closing block tags: {{/ if}}, {{/ extends}}
-        //
-        // Restrict the body to a block identifier. A permissive `.*?`
-        // classified leading regular-expression literals such as
-        // `{{ /^admin/.test(role) }}` as block-close tags.
-        name: "block-close",
-        pattern: BLOCK_CLOSE_PATTERN,
-        replacement: "/ $1 ",
-    },
-    {
-        // Standard expression tags: {{ foo }}, {{ bar.baz }}
-        name: "expression",
-        pattern: /^[ \t]*(.*?)[ \t]*$/s,
-        replacement: " $1 ",
-    },
-];
+export const rules = Object.freeze(
+    [
+        {
+            // Self-closing helpers/macros: {{@ name() /}}
+            //
+            // Restricted to the `@` prefix — comment tags ({{! ... }}) and
+            // block-open tags ({{# ... }}) are never self-closing, and a
+            // trailing `/` inside their content is just part of the body
+            // (most commonly the `*/` terminator of a `/* ... */` comment).
+            // The prior `[@#!]` class let `{{! /* … */ }}` backtrack the
+            // self-close slash onto the `*/` and split it.
+            name: "helper-self-closing",
+            pattern: /^[ \t]*(@)[ \t]*(.*?)[ \t]*\/[ \t]*$/s,
+            replacement: "$1 $2 /",
+        },
+        {
+            // Helper, branch, execution, and raw-output tags.
+            name: "helper-open",
+            pattern: /^[ \t]*([@#!*])[ \t]*(.*?)[ \t]*$/s,
+            replacement: "$1 $2 ",
+        },
+        {
+            // Closing block tags: {{/ if}}, {{/ extends}}
+            //
+            // Restrict the body to a block identifier. A permissive `.*?`
+            // classified leading regular-expression literals such as
+            // `{{ /^admin/.test(role) }}` as block-close tags.
+            name: "block-close",
+            pattern: BLOCK_CLOSE_PATTERN,
+            replacement: "/ $1 ",
+        },
+        {
+            // Standard expression tags: {{ foo }}, {{ bar.baz }}
+            name: "expression",
+            pattern: /^[ \t]*(.*?)[ \t]*$/s,
+            replacement: " $1 ",
+        },
+    ].map((rule) => Object.freeze(rule)),
+);
 
 /**
  * Normalise spacing inside a single Squirrelly tag's inner content.

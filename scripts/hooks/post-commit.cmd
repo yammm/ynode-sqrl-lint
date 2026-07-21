@@ -1,8 +1,9 @@
 @echo off
-REM post-commit: run autover across workspaces with guard and concise output
+REM >>> autover managed block >>>
 where npx >nul 2>nul
 IF ERRORLEVEL 1 (
     echo npx not found. Install Node.js/npm to use autover.
     EXIT /B 0
 )
-npx autover
+npx --no-install autover
+REM <<< autover managed block <<<

@@ -201,8 +201,10 @@ test("Unclosed tags are passed through unchanged", () => {
 
 test("Rules array is exported and well-formed", () => {
     assert.ok(Array.isArray(rules));
+    assert.ok(Object.isFrozen(rules));
     assert.ok(rules.length >= 4);
     for (const rule of rules) {
+        assert.ok(Object.isFrozen(rule), `${rule.name}: rule should be immutable`);
         assert.ok(typeof rule.name === "string", `rule name should be a string`);
         assert.ok(rule.pattern instanceof RegExp, `${rule.name}: pattern should be a RegExp`);
         assert.ok(typeof rule.replacement === "string", `${rule.name}: replacement should be a string`);

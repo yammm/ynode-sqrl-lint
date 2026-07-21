@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# post-commit: run autover across workspaces with guard and concise output
+# >>> autover managed block >>>
 if command -v npx >/dev/null 2>&1; then
-    npx autover
+    npx --no-install autover
 else
     echo "⚠️ npx not found. Install Node.js/npm to use autover."
 fi
+# <<< autover managed block <<<

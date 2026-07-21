@@ -1,11 +1,16 @@
 {
     "format": "build",
     "metadata": "timestamp",
-    "workspaces": false,
+    "separateCommit": false,
+    "workspaces": true,
+    "recursive": false,
     "guardUnchanged": true,
     "skipOnCI": true,
     "short": true,
+    "quiet": false,
     "rootAlso": true,
+    "tagOnChange": false,
     "lockPath": ".git/autover.lock",
-    "patch": null
+    "patch": null,
+    "verbose": false
 }
