@@ -245,7 +245,17 @@ npx sqrl-lint "src/**/*.sqrl" --config config/sqrl-lint.json
     "unsafeRawFilters": ["json"],
     "noImplicitNullOutput": false,
     "forbidExecute": false,
-    "forbidSafe": false
+    "forbidSafe": false,
+    "overrides": [
+        {
+            "files": "src/views/client/**/*.sqrl",
+            "excludedFiles": ["src/views/client/vendor/**"],
+            "options": {
+                "forbidExecute": true,
+                "forbidSafe": true
+            }
+        }
+    ]
 }
 ```
 
@@ -253,9 +263,17 @@ npx sqrl-lint "src/**/*.sqrl" --config config/sqrl-lint.json
 - `logicalOrFix` accepts `"parenthesize"` (the semantics-preserving default) or `"nullish"` to replace exposed `||` fallbacks with `??`. Set Prettier's `sqrlLogicalOrFix` to the same strategy when using the plugin.
 - `unsafeRawFilters` identifies serializers that must not be emitted through `{{* ... }}` or a chain containing `safe`.
 - `noImplicitNullOutput` safely adds an empty-string fallback to simple optional-chain output expressions.
-- `forbidExecute` and `forbidSafe` support restricted surfaces such as templates compiled into browser JavaScript. Use a separate explicit config when only a targeted glob needs these policies.
+- `forbidExecute` and `forbidSafe` support restricted surfaces such as templates compiled into browser JavaScript.
 - `compile` defaults to `true`; disable it only for projects that intentionally use nonstandard syntax the installed Squirrelly engine cannot compile.
 - `async` enables Squirrelly's async-template compilation mode for templates that legitimately contain `await`.
+
+### Per-Glob Overrides
+
+`overrides` applies partial lint options to matching files within the same invocation. Each entry requires `files`, accepts optional `excludedFiles`, and contains its lint settings in `options`. A pattern may be one string or an array of strings. Patterns use forward slashes and are resolved relative to the directory where `sqrl-lint` runs, including when `--config` points elsewhere.
+
+Matching entries are merged in declaration order after the base configuration, so later entries deterministically win. Array settings replace earlier arrays instead of being concatenated. `--stdin-filepath` participates in the same matching without requiring that path to exist, which keeps editor and file-mode policy consistent.
+
+Negated patterns are rejected; use `excludedFiles` so inclusion and precedence stay explicit. Absolute patterns, backslash path separators, unknown override properties, nested `overrides`, and invalid option values are operational configuration errors with exit code `2`.
 
 Configuration is strict: misspelled keys, invalid types, empty filter names, and duplicates are operational errors with exit code `2`.
 

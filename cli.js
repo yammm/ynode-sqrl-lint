@@ -15,7 +15,7 @@ import fg from "fast-glob";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 
-import { loadLintOptions } from "./src/config.js";
+import { createLintOptionsResolver, loadLintOptions } from "./src/config.js";
 import { lintContent } from "./src/linter.js";
 
 const require = createRequire(import.meta.url);
@@ -366,7 +366,6 @@ function parseArguments() {
         .option("stdin-filepath", {
             type: "string",
             description: "Path to display in error messages and diffs when using --stdin",
-            default: "<stdin>",
         })
         .option("fix", {
             alias: "f",
@@ -657,13 +656,14 @@ async function run() {
         return;
     }
 
-    let lintOptions;
+    let lintConfig;
     try {
-        ({ options: lintOptions } = await loadLintOptions({ configPath }));
+        lintConfig = await loadLintOptions({ configPath });
     } catch (error) {
         emitConfigurationError(error instanceof Error ? error.message : String(error));
         return;
     }
+    const resolveLintOptions = createLintOptionsResolver(lintConfig);
 
     /**
      * Stdin mode (`--stdin`): reads template content from stdin and writes
@@ -683,6 +683,10 @@ async function run() {
      */
     if (stdin) {
         const filePath = stdinFilepath ?? "<stdin>";
+        // Anonymous stdin has no project path and therefore receives only the
+        // base configuration. An explicit virtual path opts into overrides.
+        const lintOptions =
+            stdinFilepath === undefined ? lintConfig.options : resolveLintOptions(stdinFilepath);
         if (process.stdin.isTTY) {
             emitConfigurationError(
                 "Cannot read --stdin from an interactive terminal. Pipe template content to stdin.",
@@ -815,6 +819,7 @@ async function run() {
     async function processOneFile(file) {
         try {
             const originalContent = await fs.readFile(file, "utf8");
+            const lintOptions = resolveLintOptions(file);
             const initialLintResult = lintContent(originalContent, lintOptions);
 
             if (fix && initialLintResult.changed) {

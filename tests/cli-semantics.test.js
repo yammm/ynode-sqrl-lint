@@ -1,6 +1,6 @@
 import assert from "node:assert";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -152,6 +152,110 @@ test("--config loads a strict explicit configuration", () => {
         assert.strictEqual(result.status, 1);
         assert.match(result.stderr, /Unknown Squirrelly filter `data`/u);
         assert.match(result.stderr, /Did you mean `date`/u);
+    });
+});
+
+test("ordered overrides apply per file with exclusions and later precedence", () => {
+    withTempDir((directory) => {
+        mkdirSync(path.join(directory, "views", "client", "admin"), { recursive: true });
+        mkdirSync(path.join(directory, "views", "client", "vendor"), { recursive: true });
+        mkdirSync(path.join(directory, "views", "server"), { recursive: true });
+        writeFileSync(
+            path.join(directory, ".sqrl-lintrc.json"),
+            JSON.stringify({
+                overrides: [
+                    {
+                        files: "views/client/**/*.sqrl",
+                        excludedFiles: "views/client/vendor/**",
+                        options: { forbidSafe: true },
+                    },
+                    {
+                        files: "views/client/admin/**/*.sqrl",
+                        options: { forbidSafe: false, forbidExecute: true },
+                    },
+                ],
+            }),
+            "utf8",
+        );
+        writeFileSync(
+            path.join(directory, "views", "client", "card.sqrl"),
+            "{{ it.html | safe }}",
+            "utf8",
+        );
+        writeFileSync(
+            path.join(directory, "views", "client", "admin", "panel.sqrl"),
+            "{{! it.ready = true; }}{{ it.html | safe }}",
+            "utf8",
+        );
+        writeFileSync(
+            path.join(directory, "views", "client", "vendor", "widget.sqrl"),
+            "{{ it.html | safe }}",
+            "utf8",
+        );
+        writeFileSync(
+            path.join(directory, "views", "server", "page.sqrl"),
+            "{{ it.html | safe }}",
+            "utf8",
+        );
+
+        const result = runCli(["views/**/*.sqrl", "--report", "json", "--no-diff"], {
+            cwd: directory,
+        });
+        const payload = JSON.parse(result.stdout);
+        const resultFor = (relativePath) =>
+            payload.results.find(({ file }) => file.endsWith(relativePath));
+
+        assert.strictEqual(result.status, 1);
+        assert.deepStrictEqual(
+            resultFor(path.join("views", "client", "card.sqrl")).diagnostics.map(
+                ({ ruleId }) => ruleId,
+            ),
+            ["no-safe-filter"],
+        );
+        assert.deepStrictEqual(
+            resultFor(path.join("views", "client", "admin", "panel.sqrl")).diagnostics.map(
+                ({ ruleId }) => ruleId,
+            ),
+            ["no-execute-tag"],
+        );
+        assert.strictEqual(
+            resultFor(path.join("views", "client", "vendor", "widget.sqrl")).status,
+            "unchanged",
+        );
+        assert.strictEqual(
+            resultFor(path.join("views", "server", "page.sqrl")).status,
+            "unchanged",
+        );
+    });
+});
+
+test("--stdin-filepath selects matching configuration overrides without an on-disk file", () => {
+    withTempDir((directory) => {
+        writeFileSync(
+            path.join(directory, ".sqrl-lintrc.json"),
+            JSON.stringify({
+                overrides: [
+                    {
+                        files: "**/*",
+                        options: { forbidSafe: true },
+                    },
+                ],
+            }),
+            "utf8",
+        );
+        const input = "{{ it.html | safe }}";
+        const base = runCli(["--stdin", "--quiet"], { cwd: directory, input });
+        const overridden = runCli(
+            ["--stdin", "--stdin-filepath", "views/client/virtual.sqrl", "--report", "json"],
+            { cwd: directory, input },
+        );
+        const payload = JSON.parse(overridden.stderr);
+
+        assert.strictEqual(base.status, 0);
+        assert.strictEqual(overridden.status, 1);
+        assert.strictEqual(overridden.stdout, input);
+        assert.strictEqual(payload.results[0].file, "views/client/virtual.sqrl");
+        assert.strictEqual(payload.results[0].diagnostics[0].ruleId, "no-safe-filter");
     });
 });
 

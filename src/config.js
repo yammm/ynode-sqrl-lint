@@ -1,10 +1,13 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
+import picomatch from "picomatch";
+
 /** Default configuration filename searched for in the working directory. */
 export const CONFIG_FILENAME = ".sqrl-lintrc.json";
 
 const DEFAULT_UNSAFE_RAW_FILTERS = Object.freeze([]);
+const DEFAULT_OVERRIDES = Object.freeze([]);
 
 /**
  * Default lint options. Array values and the containing object are immutable;
@@ -29,7 +32,11 @@ const SUPPORTED_KEYS = new Set([
     "noImplicitNullOutput",
     "forbidExecute",
     "forbidSafe",
+    "overrides",
 ]);
+
+const LINT_OPTION_KEYS = new Set([...SUPPORTED_KEYS].filter((key) => key !== "overrides"));
+const OVERRIDE_KEYS = new Set(["files", "excludedFiles", "options"]);
 
 const BOOLEAN_KEYS = ["compile", "async", "noImplicitNullOutput", "forbidExecute", "forbidSafe"];
 const FILTER_LIST_KEYS = ["knownFilters", "unsafeRawFilters"];
@@ -115,14 +122,14 @@ function readFilterList(config, key, configFilePath) {
  * @param {string} configFilePath - Absolute configuration file path.
  * @returns {Record<string, boolean | string | string[]>} Validated lint options.
  */
-function validateConfig(parsed, configFilePath) {
+function validateLintOptions(parsed, configFilePath, { context = "configuration" } = {}) {
     if (!isPlainObject(parsed)) {
-        throw configError(configFilePath, "the top-level JSON value must be an object.");
+        throw configError(configFilePath, `${context} must be an object.`);
     }
 
     for (const key of Object.keys(parsed)) {
-        if (!SUPPORTED_KEYS.has(key)) {
-            throw configError(configFilePath, `unknown option "${key}".`);
+        if (!LINT_OPTION_KEYS.has(key)) {
+            throw configError(configFilePath, `${context} contains unknown option "${key}".`);
         }
     }
 
@@ -163,13 +170,219 @@ function validateConfig(parsed, configFilePath) {
 }
 
 /**
+ * Validates and copies one override glob field.
+ *
+ * Config patterns always use forward slashes and are evaluated relative to the
+ * CLI working directory. Negation belongs in `excludedFiles`, which keeps
+ * ordered override precedence unambiguous.
+ *
+ * @param {Record<string, unknown>} override - Parsed override entry.
+ * @param {"files"|"excludedFiles"} key - Override property to read.
+ * @param {string} configFilePath - Absolute configuration file path.
+ * @param {number} overrideIndex - Zero-based override index.
+ * @param {boolean} required - Whether at least one pattern is required.
+ * @returns {string[]} Detached glob pattern list.
+ */
+function readOverridePatterns(override, key, configFilePath, overrideIndex, required) {
+    if (!Object.hasOwn(override, key)) {
+        if (required) {
+            throw configError(configFilePath, `"overrides[${overrideIndex}].${key}" is required.`);
+        }
+        return [];
+    }
+
+    const raw = override[key];
+    const patterns = typeof raw === "string" ? [raw] : raw;
+    if (!Array.isArray(patterns) || (required && patterns.length === 0)) {
+        throw configError(
+            configFilePath,
+            `"overrides[${overrideIndex}].${key}" must be ${required ? "a non-empty string or array of strings" : "a string or array of strings"}.`,
+        );
+    }
+
+    return patterns.map((pattern, patternIndex) => {
+        const label = `overrides[${overrideIndex}].${key}[${patternIndex}]`;
+        if (typeof pattern !== "string" || pattern.length === 0) {
+            throw configError(configFilePath, `"${label}" must be a non-empty string.`);
+        }
+        if (pattern !== pattern.trim()) {
+            throw configError(
+                configFilePath,
+                `"${label}" must not contain surrounding whitespace.`,
+            );
+        }
+        if (pattern.startsWith("!")) {
+            throw configError(
+                configFilePath,
+                `"${label}" must not be negated; use "excludedFiles" instead.`,
+            );
+        }
+        if (pattern.includes("\\")) {
+            throw configError(
+                configFilePath,
+                `"${label}" must use forward slashes as path separators.`,
+            );
+        }
+        if (path.posix.isAbsolute(pattern) || path.win32.isAbsolute(pattern)) {
+            throw configError(
+                configFilePath,
+                `"${label}" must be relative to the lint working directory.`,
+            );
+        }
+        try {
+            picomatch.makeRe(pattern);
+        } catch (error) {
+            throw configError(
+                configFilePath,
+                `"${label}" is not a valid glob pattern (${error.message}).`,
+                error,
+            );
+        }
+        return pattern;
+    });
+}
+
+/**
+ * Validates ordered per-glob lint option overrides.
+ *
+ * @param {unknown} rawOverrides - Parsed `overrides` value.
+ * @param {string} configFilePath - Absolute configuration file path.
+ * @returns {Array<{files: string[], excludedFiles: string[], options: Record<string, boolean|string|string[]>}>} Validated overrides.
+ */
+function validateOverrides(rawOverrides, configFilePath) {
+    if (rawOverrides === undefined) {
+        return [];
+    }
+    if (!Array.isArray(rawOverrides)) {
+        throw configError(configFilePath, '"overrides" must be an array.');
+    }
+
+    return rawOverrides.map((override, overrideIndex) => {
+        if (!isPlainObject(override)) {
+            throw configError(configFilePath, `"overrides[${overrideIndex}]" must be an object.`);
+        }
+        for (const key of Object.keys(override)) {
+            if (!OVERRIDE_KEYS.has(key)) {
+                throw configError(
+                    configFilePath,
+                    `"overrides[${overrideIndex}]" contains unknown property "${key}".`,
+                );
+            }
+        }
+
+        const files = readOverridePatterns(override, "files", configFilePath, overrideIndex, true);
+        const excludedFiles = readOverridePatterns(
+            override,
+            "excludedFiles",
+            configFilePath,
+            overrideIndex,
+            false,
+        );
+        if (!Object.hasOwn(override, "options")) {
+            throw configError(configFilePath, `"overrides[${overrideIndex}].options" is required.`);
+        }
+        const options = validateLintOptions(override.options, configFilePath, {
+            context: `"overrides[${overrideIndex}].options"`,
+        });
+
+        // Override entries are partial. Remove defaults for keys the entry did
+        // not explicitly provide so base settings and earlier matches survive.
+        for (const key of LINT_OPTION_KEYS) {
+            if (!Object.hasOwn(override.options, key)) {
+                delete options[key];
+            }
+        }
+
+        return { files, excludedFiles, options };
+    });
+}
+
+/**
+ * Strictly validates a parsed configuration and applies base defaults.
+ *
+ * @param {unknown} parsed - Parsed JSON configuration.
+ * @param {string} configFilePath - Absolute configuration file path.
+ * @returns {{options: Record<string, boolean|string|string[]>, overrides: Array<{files: string[], excludedFiles: string[], options: Record<string, boolean|string|string[]>}>}} Validated configuration.
+ */
+function validateConfig(parsed, configFilePath) {
+    if (!isPlainObject(parsed)) {
+        throw configError(configFilePath, "the top-level JSON value must be an object.");
+    }
+    for (const key of Object.keys(parsed)) {
+        if (!SUPPORTED_KEYS.has(key)) {
+            throw configError(configFilePath, `unknown option "${key}".`);
+        }
+    }
+
+    const baseInput = Object.fromEntries(
+        Object.entries(parsed).filter(([key]) => key !== "overrides"),
+    );
+    return {
+        options: validateLintOptions(baseInput, configFilePath),
+        overrides: validateOverrides(parsed.overrides, configFilePath),
+    };
+}
+
+/**
+ * Creates a per-path lint option resolver. Override globs are matched against a
+ * forward-slash, working-directory-relative path. Matching entries are applied
+ * in declaration order, so later entries deterministically win.
+ *
+ * @param {{options: Record<string, boolean|string|string[]>, overrides?: Array<{files: string[], excludedFiles?: string[], options: Record<string, boolean|string|string[]>}>}} config - Loaded lint configuration.
+ * @param {object} [settings] - Resolver settings.
+ * @param {string} [settings.cwd=process.cwd()] - Base directory for file paths and override globs.
+ * @returns {(filePath: string) => Record<string, boolean|string|string[]>} Per-file option resolver.
+ */
+export function createLintOptionsResolver(config, { cwd = process.cwd() } = {}) {
+    const resolvedCwd = path.resolve(cwd);
+    const preparedOverrides = (config.overrides ?? DEFAULT_OVERRIDES).map((override) => ({
+        options: override.options,
+        matches: picomatch(override.files, { dot: true }),
+        excluded:
+            override.excludedFiles?.length > 0
+                ? picomatch(override.excludedFiles, { dot: true })
+                : () => false,
+    }));
+
+    return (filePath) => {
+        const absolutePath = path.resolve(resolvedCwd, filePath);
+        const relativePath = path.relative(resolvedCwd, absolutePath).split(path.sep).join("/");
+        const outsideCwd = relativePath === ".." || relativePath.startsWith("../");
+        const options = {
+            ...config.options,
+            unsafeRawFilters: [...(config.options.unsafeRawFilters ?? [])],
+            ...(config.options.knownFilters === undefined
+                ? {}
+                : { knownFilters: [...config.options.knownFilters] }),
+        };
+
+        if (outsideCwd) {
+            return options;
+        }
+        for (const override of preparedOverrides) {
+            if (!override.matches(relativePath) || override.excluded(relativePath)) {
+                continue;
+            }
+            Object.assign(options, override.options);
+            if (override.options.unsafeRawFilters !== undefined) {
+                options.unsafeRawFilters = [...override.options.unsafeRawFilters];
+            }
+            if (override.options.knownFilters !== undefined) {
+                options.knownFilters = [...override.options.knownFilters];
+            }
+        }
+        return options;
+    };
+}
+
+/**
  * Loads lint options from an explicit JSON file or the conventional file in
  * the working directory. A missing conventional file is not an error.
  *
  * @param {object} [settings] - Configuration lookup settings.
  * @param {string} [settings.configPath] - Explicit configuration path, relative to `cwd` when needed.
  * @param {string} [settings.cwd=process.cwd()] - Directory used for implicit lookup and relative paths.
- * @returns {Promise<{options: Record<string, boolean | string | string[]>, path: string | undefined}>} Loaded options and source path.
+ * @returns {Promise<{options: Record<string, boolean | string | string[]>, overrides: Array<{files: string[], excludedFiles: string[], options: Record<string, boolean|string|string[]>}>, path: string | undefined}>} Loaded options, ordered overrides, and source path.
  */
 export async function loadLintOptions({ configPath, cwd = process.cwd() } = {}) {
     const isExplicit = configPath !== undefined;
@@ -190,6 +403,7 @@ export async function loadLintOptions({ configPath, cwd = process.cwd() } = {}) 
                     forbidExecute: DEFAULT_LINT_OPTIONS.forbidExecute,
                     forbidSafe: DEFAULT_LINT_OPTIONS.forbidSafe,
                 },
+                overrides: [],
                 path: undefined,
             };
         }
@@ -203,8 +417,9 @@ export async function loadLintOptions({ configPath, cwd = process.cwd() } = {}) 
         throw configError(configFilePath, `invalid JSON (${error.message}).`, error);
     }
 
+    const config = validateConfig(parsed, configFilePath);
     return {
-        options: validateConfig(parsed, configFilePath),
+        ...config,
         path: configFilePath,
     };
 }

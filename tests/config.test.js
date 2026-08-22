@@ -4,7 +4,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { CONFIG_FILENAME, DEFAULT_LINT_OPTIONS, loadLintOptions } from "../src/config.js";
+import {
+    CONFIG_FILENAME,
+    createLintOptionsResolver,
+    DEFAULT_LINT_OPTIONS,
+    loadLintOptions,
+} from "../src/config.js";
 
 async function makeTempDir() {
     return mkdtemp(path.join(tmpdir(), "sqrl-lint-config-test-"));
@@ -47,6 +52,7 @@ test("a missing implicit config returns detached defaults and no path", async ()
 
         assert.strictEqual(first.path, undefined);
         assert.deepStrictEqual(first.options, DEFAULT_LINT_OPTIONS);
+        assert.deepStrictEqual(first.overrides, []);
         assert.notStrictEqual(first.options, DEFAULT_LINT_OPTIONS);
         assert.notStrictEqual(first.options, second.options);
         assert.notStrictEqual(first.options.unsafeRawFilters, second.options.unsafeRawFilters);
@@ -260,6 +266,136 @@ test("rejects duplicate names independently in each filter list", async (t) => {
                         error.message.includes(configPath) &&
                         /duplicate filter name "json"/u.test(error.message),
                 );
+            });
+        });
+    }
+});
+
+test("loads ordered per-glob overrides as detached partial options", async () => {
+    await withTempDir(async (directory) => {
+        await writeConfig(directory, {
+            compile: false,
+            forbidSafe: false,
+            overrides: [
+                {
+                    files: "views/client/**/*.sqrl",
+                    excludedFiles: ["views/client/vendor/**"],
+                    options: { forbidSafe: true, knownFilters: ["json"] },
+                },
+                {
+                    files: ["views/client/admin/**/*.sqrl"],
+                    options: { forbidSafe: false, forbidExecute: true },
+                },
+            ],
+        });
+
+        const first = await loadLintOptions({ cwd: directory });
+        const second = await loadLintOptions({ cwd: directory });
+        assert.strictEqual(first.options.compile, false);
+        assert.deepStrictEqual(first.overrides, [
+            {
+                files: ["views/client/**/*.sqrl"],
+                excludedFiles: ["views/client/vendor/**"],
+                options: { knownFilters: ["json"], forbidSafe: true },
+            },
+            {
+                files: ["views/client/admin/**/*.sqrl"],
+                excludedFiles: [],
+                options: { forbidExecute: true, forbidSafe: false },
+            },
+        ]);
+        assert.notStrictEqual(
+            first.overrides[0].options.knownFilters,
+            second.overrides[0].options.knownFilters,
+        );
+    });
+});
+
+test("resolves matching overrides in order for files and virtual stdin paths", async () => {
+    await withTempDir(async (directory) => {
+        await writeConfig(directory, {
+            compile: false,
+            forbidSafe: false,
+            overrides: [
+                {
+                    files: "views/client/**/*.sqrl",
+                    excludedFiles: "views/client/vendor/**",
+                    options: { forbidSafe: true, unsafeRawFilters: ["json"] },
+                },
+                {
+                    files: "views/client/admin/**/*.sqrl",
+                    options: { forbidSafe: false, forbidExecute: true },
+                },
+            ],
+        });
+        const config = await loadLintOptions({ cwd: directory });
+        const resolveOptions = createLintOptionsResolver(config, { cwd: directory });
+
+        assert.deepStrictEqual(resolveOptions("views/client/card.sqrl"), {
+            ...config.options,
+            unsafeRawFilters: ["json"],
+            forbidSafe: true,
+        });
+        assert.deepStrictEqual(resolveOptions("views/client/admin/panel.sqrl"), {
+            ...config.options,
+            unsafeRawFilters: ["json"],
+            forbidSafe: false,
+            forbidExecute: true,
+        });
+        assert.deepStrictEqual(resolveOptions("views/client/vendor/widget.sqrl"), config.options);
+        assert.deepStrictEqual(resolveOptions("views/server/page.sqrl"), config.options);
+    });
+});
+
+test("rejects malformed overrides with deterministic indexed errors", async (t) => {
+    const cases = [
+        ["array shape", { overrides: {} }, /"overrides" must be an array/u],
+        ["entry shape", { overrides: [null] }, /"overrides\[0\]" must be an object/u],
+        [
+            "unknown entry key",
+            { overrides: [{ files: "**/*.sqrl", options: {}, typo: true }] },
+            /overrides\[0\].*unknown property "typo"/u,
+        ],
+        ["missing files", { overrides: [{ options: {} }] }, /overrides\[0\]\.files.*required/u],
+        [
+            "empty files",
+            { overrides: [{ files: [], options: {} }] },
+            /overrides\[0\]\.files.*non-empty/u,
+        ],
+        [
+            "negation",
+            { overrides: [{ files: ["!vendor/**"], options: {} }] },
+            /must not be negated/u,
+        ],
+        [
+            "backslash",
+            { overrides: [{ files: ["views\\**\\*.sqrl"], options: {} }] },
+            /must use forward slashes/u,
+        ],
+        [
+            "absolute",
+            { overrides: [{ files: ["/views/**/*.sqrl"], options: {} }] },
+            /must be relative/u,
+        ],
+        [
+            "missing options",
+            { overrides: [{ files: "**/*.sqrl" }] },
+            /overrides\[0\]\.options.*required/u,
+        ],
+        [
+            "nested override",
+            {
+                overrides: [{ files: "**/*.sqrl", options: { overrides: [] } }],
+            },
+            /overrides\[0\]\.options.*unknown option "overrides"/u,
+        ],
+    ];
+
+    for (const [name, value, expected] of cases) {
+        await t.test(name, async () => {
+            await withTempDir(async (directory) => {
+                await writeConfig(directory, value);
+                await assert.rejects(loadLintOptions({ cwd: directory }), expected);
             });
         });
     }
