@@ -727,7 +727,8 @@ function maskStringsAndComments(source, maskRegex = false) {
 
     function maskQuoted(start, quote) {
         let cursor = start;
-        mask(cursor++);
+        mask(cursor);
+        ++cursor;
         while (cursor < source.length) {
             const character = source[cursor];
             mask(cursor);
@@ -755,13 +756,16 @@ function maskStringsAndComments(source, maskRegex = false) {
 
     function maskTemplate(start) {
         let cursor = start;
-        mask(cursor++);
+        mask(cursor);
+        ++cursor;
         while (cursor < source.length) {
             const character = source[cursor];
             if (character === "\\") {
-                mask(cursor++);
+                mask(cursor);
+                ++cursor;
                 if (cursor < source.length) {
-                    mask(cursor++);
+                    mask(cursor);
+                    ++cursor;
                 }
             } else if (character === "`") {
                 mask(cursor);
@@ -770,7 +774,8 @@ function maskStringsAndComments(source, maskRegex = false) {
                 mask(cursor);
                 cursor = scanCode(cursor + 2, true);
             } else {
-                mask(cursor++);
+                mask(cursor);
+                ++cursor;
             }
         }
         return cursor;
