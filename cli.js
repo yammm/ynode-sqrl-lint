@@ -6,10 +6,12 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { realpathSync } from "node:fs";
 import fs from "node:fs/promises";
 import { createRequire } from "node:module";
 import os from "node:os";
-import { fileURLToPath } from "node:url";
+import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import fg from "fast-glob";
 import yargs from "yargs";
@@ -19,7 +21,31 @@ import { createLintOptionsResolver, loadLintOptions } from "./src/config.js";
 import { lintContent } from "./src/linter.js";
 
 const require = createRequire(import.meta.url);
-const { version } = require("./package.json");
+const packageMetadata = require("./package.json");
+const { version } = packageMetadata;
+
+/** Stable rule identifier emitted when only template formatting differs. */
+export const FORMATTING_RULE_ID = "formatting";
+
+const FORMATTING_MESSAGE =
+    "Template formatting does not match @ynode/sqrl-lint. Run with --fix to apply safe formatting.";
+
+const RULE_DESCRIPTIONS = new Map([
+    [FORMATTING_RULE_ID, "Template formatting differs from the canonical output."],
+    ["known-filter", "Require filters to appear in the configured project registry."],
+    ["no-ambiguous-leading-prefix", "Reject ambiguous Squirrelly tag prefixes."],
+    ["no-execute-tag", "Disallow execution tags on restricted template surfaces."],
+    ["no-implicit-null-output", "Require an explicit fallback for optional-chain output."],
+    ["no-output-assignment", "Disallow assignments and updates in output tags."],
+    ["no-safe-filter", "Disallow the safe filter on restricted template surfaces."],
+    ["no-unparenthesized-logical-or", "Protect logical OR from Squirrelly filter parsing."],
+    ["no-unsafe-raw-json", "Disallow unsafe raw JSON serialization."],
+    ["valid-async-syntax", "Require consistent Squirrelly async markers and mode."],
+    ["valid-elif", "Require Squirrelly's supported elif spelling."],
+    ["valid-filter", "Require well-formed Squirrelly filter segments."],
+    ["valid-native-branch", "Require valid native helper branch ordering."],
+    ["valid-squirrelly-syntax", "Require a template that the Squirrelly engine can parse."],
+]);
 
 /** Available CPU threads (runtime value, computed once). */
 const cpuCount = os.availableParallelism?.() ?? os.cpus().length;
@@ -35,6 +61,206 @@ const ansiColors = {
     gray: (text) => `\x1b[90m${text}\x1b[0m`,
     bold: (text) => `\x1b[1m${text}\x1b[0m`,
 };
+
+/**
+ * Returns the first changed UTF-16 position between original and formatted
+ * source as a normal lint diagnostic. The position is anchored to the original
+ * input, matching semantic diagnostics.
+ *
+ * @param {string} original - Original template source.
+ * @param {string} formatted - Canonically formatted source.
+ * @returns {{ruleId: string, severity: "error", message: string, index: number, line: number, column: number, fixable: true}|null} Formatting diagnostic, or null when sources match.
+ */
+export function createFormattingDiagnostic(original, formatted) {
+    let index = 0;
+    const sharedLength = Math.min(original.length, formatted.length);
+    while (index < sharedLength && original[index] === formatted[index]) {
+        ++index;
+    }
+    if (index === original.length && index === formatted.length) {
+        return null;
+    }
+
+    let line = 1;
+    let column = 1;
+    for (let cursor = 0; cursor < index; ++cursor) {
+        if (original[cursor] === "\n") {
+            ++line;
+            column = 1;
+        } else {
+            ++column;
+        }
+    }
+    return {
+        ruleId: FORMATTING_RULE_ID,
+        severity: "error",
+        message: FORMATTING_MESSAGE,
+        index,
+        line,
+        column,
+        fixable: true,
+    };
+}
+
+/**
+ * Resolves an existing path through filesystem aliases while retaining a
+ * deterministic absolute path for virtual or nonexistent locations.
+ *
+ * @param {string} filePath - Path to normalize.
+ * @returns {string} Canonical absolute path when available.
+ */
+function resolveCanonicalPath(filePath) {
+    const absolutePath = path.resolve(filePath);
+    try {
+        return realpathSync(absolutePath);
+    } catch {
+        return absolutePath;
+    }
+}
+
+/**
+ * Converts a local path to a SARIF artifact location. Paths inside the working
+ * directory are portable `%SRCROOT%`-relative URIs; outside paths use file URIs.
+ *
+ * @param {string} filePath - Real or virtual lint target path.
+ * @param {string} cwd - SARIF source root.
+ * @returns {{uri: string, uriBaseId?: string}} SARIF artifact location.
+ */
+function createArtifactLocation(filePath, cwd) {
+    const sourceRoot = resolveCanonicalPath(cwd);
+    const absolutePath = resolveCanonicalPath(path.resolve(sourceRoot, filePath));
+    const relativePath = path.relative(sourceRoot, absolutePath);
+    if (relativePath !== ".." && !relativePath.startsWith(`..${path.sep}`)) {
+        return {
+            uri: relativePath.split(path.sep).map(encodeURIComponent).join("/"),
+            uriBaseId: "%SRCROOT%",
+        };
+    }
+    return { uri: pathToFileURL(absolutePath).href };
+}
+
+/**
+ * Builds a deterministic SARIF 2.1.0 log from CLI file results.
+ *
+ * @param {object} options - SARIF report options.
+ * @param {Array<{file?: string, diagnostics?: object[], formattingDiagnostic?: object, status?: string, error?: string}>} [options.results=[]] - Internal CLI results.
+ * @param {"check"|"fix"} [options.mode="check"] - Lint invocation mode.
+ * @param {number} [options.exitCode=0] - Process exit code represented by the invocation.
+ * @param {string} [options.cwd=process.cwd()] - Source root for artifact URIs.
+ * @param {{filesMatched?: number, fixedFiles?: number, lintErrors?: number, processingErrors?: number, durationMs?: number}} [options.stats={}] - Run summary properties.
+ * @returns {object} SARIF 2.1.0 log.
+ */
+export function createSarifReport({
+    results = [],
+    mode = "check",
+    exitCode = 0,
+    cwd = process.cwd(),
+    stats = {},
+} = {}) {
+    const findings = [];
+    const notifications = [];
+
+    for (const entry of results) {
+        if (entry.error) {
+            notifications.push({
+                level: "error",
+                message: { text: entry.error },
+                ...(entry.file
+                    ? {
+                          locations: [
+                              {
+                                  physicalLocation: {
+                                      artifactLocation: createArtifactLocation(entry.file, cwd),
+                                  },
+                              },
+                          ],
+                      }
+                    : {}),
+            });
+        }
+        if (!entry.file) {
+            continue;
+        }
+        const entryFindings = [
+            ...(entry.formattingDiagnostic ? [entry.formattingDiagnostic] : []),
+            ...(entry.diagnostics ?? []),
+        ].sort(
+            (left, right) =>
+                left.line - right.line ||
+                left.column - right.column ||
+                left.ruleId.localeCompare(right.ruleId),
+        );
+        for (const diagnostic of entryFindings) {
+            findings.push({ file: entry.file, diagnostic });
+        }
+    }
+
+    const ruleIds = [...new Set(findings.map(({ diagnostic }) => diagnostic.ruleId))].sort();
+    const ruleIndex = new Map(ruleIds.map((ruleId, index) => [ruleId, index]));
+    const documentationUrl = new URL(packageMetadata.homepage);
+    documentationUrl.hash = "";
+    const rules = ruleIds.map((ruleId) => ({
+        id: ruleId,
+        shortDescription: {
+            text: RULE_DESCRIPTIONS.get(ruleId) ?? `Squirrelly lint rule ${ruleId}.`,
+        },
+        helpUri: `${documentationUrl.href}${ruleId === FORMATTING_RULE_ID ? "#formatting-rules" : "#semantic-rules"}`,
+        defaultConfiguration: { level: "error" },
+    }));
+    const sarifResults = findings.map(({ file, diagnostic }) => ({
+        ruleId: diagnostic.ruleId,
+        ruleIndex: ruleIndex.get(diagnostic.ruleId),
+        level: "error",
+        message: { text: diagnostic.message },
+        locations: [
+            {
+                physicalLocation: {
+                    artifactLocation: createArtifactLocation(file, cwd),
+                    region: {
+                        startLine: diagnostic.line,
+                        startColumn: diagnostic.column,
+                        charOffset: diagnostic.index,
+                    },
+                },
+            },
+        ],
+        properties: { fixable: diagnostic.fixable === true },
+    }));
+
+    return {
+        $schema: "https://json.schemastore.org/sarif-2.1.0.json",
+        version: "2.1.0",
+        runs: [
+            {
+                tool: {
+                    driver: {
+                        name: packageMetadata.name,
+                        semanticVersion: version,
+                        informationUri: packageMetadata.homepage,
+                        rules,
+                    },
+                },
+                columnKind: "utf16CodeUnits",
+                originalUriBaseIds: {
+                    "%SRCROOT%": {
+                        uri: pathToFileURL(`${resolveCanonicalPath(cwd)}${path.sep}`).href,
+                    },
+                },
+                invocations: [
+                    {
+                        executionSuccessful: exitCode !== 2,
+                        exitCode,
+                        ...(notifications.length > 0
+                            ? { toolExecutionNotifications: notifications }
+                            : {}),
+                    },
+                ],
+                results: sarifResults,
+                properties: { mode, ...stats },
+            },
+        ],
+    };
+}
 
 /**
  * Produces a minimal unified-style diff between two strings.
@@ -374,7 +600,7 @@ function parseArguments() {
         })
         .option("report", {
             type: "string",
-            choices: ["text", "json"],
+            choices: ["text", "json", "sarif"],
             default: "text",
             description: "Output format",
         })
@@ -481,12 +707,27 @@ async function run() {
     } = argv;
     const startTime = performance.now();
     const useJsonReport = report === "json";
+    const useSarifReport = report === "sarif";
+    const useMachineReport = useJsonReport || useSarifReport;
     const quiet = Boolean(quietOption);
-    const colors = createColors(color && !useJsonReport && !quiet);
+    const colors = createColors(color && !useMachineReport && !quiet);
     const concurrency = Number(concurrencyOption);
+    const mode = fix ? "fix" : "check";
 
-    /** @type {Array<{file?: string, status: string, error?: string, diff?: string, diagnostics?: object[]}>} */
+    /** @type {Array<{file?: string, status: string, error?: string, diff?: string, diagnostics?: object[], formattingDiagnostic?: object}>} */
     const results = [];
+
+    /**
+     * Removes SARIF-only internal fields from the existing JSON report schema.
+     *
+     * @param {object} entry - Internal file result.
+     * @returns {object} Public JSON result.
+     */
+    function publicJsonResult(entry) {
+        const copy = { ...entry };
+        delete copy.formattingDiagnostic;
+        return copy;
+    }
 
     /**
      * Exit codes:
@@ -506,31 +747,38 @@ async function run() {
             process.exitCode = 2;
             return;
         }
-        if (useJsonReport) {
-            const report = JSON.stringify(
-                {
-                    mode: fix ? "fix" : "check",
-                    success: false,
-                    concurrency,
-                    filesMatched: 0,
-                    fixedFiles: 0,
-                    lintErrors: 0,
-                    processingErrors: 1,
-                    durationMs: Math.round(performance.now() - startTime),
-                    results: [
-                        {
-                            status: "error",
-                            error: message,
-                        },
-                    ],
-                },
-                null,
-                4,
-            );
+        if (useJsonReport || useSarifReport) {
+            const durationMs = Math.round(performance.now() - startTime);
+            const errorResult = { status: "error", error: message };
+            const reportPayload = useSarifReport
+                ? createSarifReport({
+                      results: [errorResult],
+                      mode,
+                      exitCode: 2,
+                      stats: {
+                          filesMatched: 0,
+                          fixedFiles: 0,
+                          lintErrors: 0,
+                          processingErrors: 1,
+                          durationMs,
+                      },
+                  })
+                : {
+                      mode,
+                      success: false,
+                      concurrency,
+                      filesMatched: 0,
+                      fixedFiles: 0,
+                      lintErrors: 0,
+                      processingErrors: 1,
+                      durationMs,
+                      results: [errorResult],
+                  };
+            const reportOutput = JSON.stringify(reportPayload, null, 4);
             if (stdin) {
-                console.error(report);
+                console.error(reportOutput);
             } else {
-                console.log(report);
+                console.log(reportOutput);
             }
         } else {
             // Quiet mode already returned above; text mode always reports.
@@ -567,7 +815,7 @@ async function run() {
             console.log(
                 JSON.stringify(
                     {
-                        mode: fix ? "fix" : "check",
+                        mode,
                         success,
                         concurrency,
                         filesMatched,
@@ -575,13 +823,37 @@ async function run() {
                         lintErrors: lintErrorCount,
                         processingErrors: processingErrorCount,
                         durationMs,
-                        results,
+                        results: results.map(publicJsonResult),
                     },
                     null,
                     4,
                 ),
             );
             process.exitCode = processingErrorCount > 0 ? 2 : success ? 0 : 1;
+            return;
+        }
+
+        if (useSarifReport) {
+            const exitCode = processingErrorCount > 0 ? 2 : success ? 0 : 1;
+            console.log(
+                JSON.stringify(
+                    createSarifReport({
+                        results,
+                        mode,
+                        exitCode,
+                        stats: {
+                            filesMatched,
+                            fixedFiles: fixCount,
+                            lintErrors: lintErrorCount,
+                            processingErrors: processingErrorCount,
+                            durationMs,
+                        },
+                    }),
+                    null,
+                    4,
+                ),
+            );
+            process.exitCode = exitCode;
             return;
         }
 
@@ -721,6 +993,9 @@ async function run() {
             status,
             ...(diagnostics.length > 0 ? { diagnostics } : {}),
         };
+        const formattingDiagnostic = hasFormattingError
+            ? createFormattingDiagnostic(input, initialLintResult.content)
+            : null;
 
         // Stdout remains the template data channel in every stdin mode.
         process.stdout.write(initialLintResult.content);
@@ -729,7 +1004,7 @@ async function run() {
             console.error(
                 JSON.stringify(
                     {
-                        mode: fix ? "fix" : "check",
+                        mode,
                         success: !hasLintError,
                         concurrency: 1,
                         filesMatched: 1,
@@ -739,6 +1014,31 @@ async function run() {
                         durationMs: Math.round(performance.now() - startTime),
                         results: [entry],
                     },
+                    null,
+                    4,
+                ),
+            );
+        } else if (useSarifReport && !quiet) {
+            const durationMs = Math.round(performance.now() - startTime);
+            console.error(
+                JSON.stringify(
+                    createSarifReport({
+                        results: [
+                            {
+                                ...entry,
+                                ...(formattingDiagnostic ? { formattingDiagnostic } : {}),
+                            },
+                        ],
+                        mode,
+                        exitCode: hasLintError ? 1 : 0,
+                        stats: {
+                            filesMatched: 1,
+                            fixedFiles: fix && initialLintResult.changed ? 1 : 0,
+                            lintErrors: hasLintError ? 1 : 0,
+                            processingErrors: 0,
+                            durationMs,
+                        },
+                    }),
                     null,
                     4,
                 ),
@@ -814,7 +1114,7 @@ async function run() {
      * file contents can be released immediately.
      *
      * @param {string} file - Absolute path to the `.sqrl` file.
-     * @returns {Promise<{file: string, status: string, diff?: string, coloredDiff?: string, error?: string, diagnostics?: object[]}>}
+     * @returns {Promise<{file: string, status: string, diff?: string, coloredDiff?: string, error?: string, diagnostics?: object[], formattingDiagnostic?: object}>}
      */
     async function processOneFile(file) {
         try {
@@ -858,6 +1158,14 @@ async function run() {
                     diagnosticCount: diagnostics.length,
                 }),
                 ...(diagnostics.length > 0 ? { diagnostics } : {}),
+                ...(initialLintResult.changed
+                    ? {
+                          formattingDiagnostic: createFormattingDiagnostic(
+                              originalContent,
+                              initialLintResult.content,
+                          ),
+                      }
+                    : {}),
             };
 
             if (diff && initialLintResult.changed) {
@@ -867,7 +1175,7 @@ async function run() {
                     formatted: initialLintResult.content,
                     colors: noColors,
                 });
-                if (result.diff && !useJsonReport && !quiet) {
+                if (result.diff && !useMachineReport && !quiet) {
                     result.coloredDiff = createDiff({
                         filePath: file,
                         original: originalContent,
@@ -921,12 +1229,15 @@ async function run() {
             ...(result.diff ? { diff: result.diff } : {}),
             ...(result.error ? { error: result.error } : {}),
             ...(result.diagnostics?.length ? { diagnostics: result.diagnostics } : {}),
+            ...(result.formattingDiagnostic
+                ? { formattingDiagnostic: result.formattingDiagnostic }
+                : {}),
         };
         results.push(entry);
 
         if (result.status === "fixed" || result.status === "fixed-with-errors") {
             ++fixCount;
-            if (!useJsonReport && !quiet) {
+            if (!useMachineReport && !quiet) {
                 console.log(`${colors.cyan("Formatted:")} ${result.file}`);
             }
         }
@@ -937,7 +1248,7 @@ async function run() {
             result.status === "fixed-with-errors"
         ) {
             ++lintErrorCount;
-            if (!useJsonReport && !quiet) {
+            if (!useMachineReport && !quiet) {
                 if (result.status === "needs-formatting") {
                     console.error(
                         `${colors.red("Linting Error:")} ${result.file} is not formatted correctly.`,
@@ -960,7 +1271,7 @@ async function run() {
 
         if (result.status === "error") {
             ++processingErrorCount;
-            if (!useJsonReport && !quiet) {
+            if (!useMachineReport && !quiet) {
                 console.error(`${colors.red("Error processing")} ${result.file}: ${result.error}`);
             }
         }

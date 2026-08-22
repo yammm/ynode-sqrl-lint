@@ -11,7 +11,7 @@ A dedicated linter and formatter for Squirrelly (`.sqrl`) templates, built speci
 - **Strict Formatting:** Enforces consistent spacing for helpers (`{{@`, `{{#`), base brackets (`{{`, `}}`), raw outputs (`{{*`), whitespace controls, execution tags (`{{!`), and block closures (`{{/`).
 - **Semantic Guardrails:** Catches bare logical OR expressions, dead `elseif` spellings, output assignments, unsafe JSON rendering, invalid native branches, malformed templates, and optional project policies.
 - **Engine Validation:** Compiles each finalized template with Squirrelly so malformed JavaScript, comments, and helper structure fail during linting instead of at request time.
-- **Actionable Diagnostics:** Emits stable rule IDs with one-based line and column locations in text and JSON reports.
+- **Actionable Diagnostics:** Emits stable rule IDs with one-based line and column locations in text, JSON, and SARIF 2.1.0 reports.
 - **Read-Only Checks:** Fails CI pipelines with exit code `1` for formatting or semantic violations.
 - **Quality of Life:** Automatically ignores `node_modules` by default and presents beautiful, colorized error logs and success reports.
 - **Conservative Auto-Repair:** `--fix` applies formatting and semantics-preserving repairs while leaving judgment calls as diagnostics.
@@ -53,6 +53,16 @@ npx sqrl-lint "src/**/*.sqrl" --report json
 
 In file mode, this emits a machine-readable JSON summary to `stdout`, suitable for CI/log parsers. In `--stdin` mode, formatted template content uses `stdout`, so the JSON report is written to `stderr` instead. Both modes use the same summary schema: mode and success, aggregate file/error counts, concurrency and duration, plus a `results` array with per-file statuses and diagnostics. Each diagnostic includes `ruleId`, `severity`, `message`, `index`, `line`, `column`, and `fixable`. Check-mode locations refer to the invocation's original input. After `--fix` writes safe repairs, unresolved diagnostics are recalculated against the finalized file or stdout content.
 
+### SARIF Reporting
+
+```bash
+npx sqrl-lint "src/**/*.sqrl" --report sarif > sqrl-lint.sarif
+```
+
+SARIF 2.1.0 output integrates with code-scanning systems while keeping rule IDs and source locations stable. Semantic diagnostics retain their normal IDs, and formatting differences use the dedicated `formatting` rule at the first changed source position. Successful `--fix` runs omit resolved findings. Project files use portable `%SRCROOT%`-relative artifact URIs, and operational failures appear as invocation notifications.
+
+As with JSON reporting, file-mode SARIF is written to `stdout`; stdin template data stays on `stdout`, so `--stdin --report sarif` writes the report to `stderr`.
+
 ### Disable ANSI Colors
 
 ```bash
@@ -91,7 +101,7 @@ Processes files with bounded parallelism for faster runs on large repositories.
 cat src/views/home.sqrl | npx sqrl-lint --stdin --fix
 ```
 
-Reads template content from stdin and writes the formatted output to stdout, making it ideal for editor "format on save" integrations, shell pipelines, and git hooks. Use `--stdin-filepath <path>` to control the filename shown in error messages and diffs.
+Reads template content from stdin and writes the formatted output to stdout, making it ideal for editor "format on save" integrations, shell pipelines, and git hooks. Anonymous stdin uses the base lint configuration. Use `--stdin-filepath <path>` to control the filename shown in error messages and diffs and opt that virtual path into matching configuration overrides.
 
 ### Quiet Mode
 
@@ -99,7 +109,7 @@ Reads template content from stdin and writes the formatted output to stdout, mak
 npx sqrl-lint "src/**/*.sqrl" --quiet
 ```
 
-Suppresses reports and diagnostics, including JSON reports; only the exit code indicates the result. In `--stdin` mode, the formatted template content remains on `stdout` because it is the command's data output.
+Suppresses reports and diagnostics, including JSON and SARIF reports; only the exit code indicates the result. In `--stdin` mode, the formatted template content remains on `stdout` because it is the command's data output.
 
 ### Version
 
@@ -271,7 +281,7 @@ npx sqrl-lint "src/**/*.sqrl" --config config/sqrl-lint.json
 
 `overrides` applies partial lint options to matching files within the same invocation. Each entry requires `files`, accepts optional `excludedFiles`, and contains its lint settings in `options`. A pattern may be one string or an array of strings. Patterns use forward slashes and are resolved relative to the directory where `sqrl-lint` runs, including when `--config` points elsewhere.
 
-Matching entries are merged in declaration order after the base configuration, so later entries deterministically win. Array settings replace earlier arrays instead of being concatenated. `--stdin-filepath` participates in the same matching without requiring that path to exist, which keeps editor and file-mode policy consistent.
+Matching entries are merged in declaration order after the base configuration, so later entries deterministically win. Array settings replace earlier arrays instead of being concatenated. An explicit `--stdin-filepath` participates in the same matching without requiring that path to exist, which keeps editor and file-mode policy consistent; anonymous stdin uses only the base configuration.
 
 Negated patterns are rejected; use `excludedFiles` so inclusion and precedence stay explicit. Absolute patterns, backslash path separators, unknown override properties, nested `overrides`, and invalid option values are operational configuration errors with exit code `2`.
 
