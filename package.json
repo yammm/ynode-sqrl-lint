@@ -1,6 +1,6 @@
 {
     "name": "@ynode/sqrl-lint",
-    "version": "1.7.0+336704",
+    "version": "1.7.0+336705",
     "description": "Tag-aware linter, formatter, and Prettier plugin for Squirrelly (.sqrl) templates",
     "type": "module",
     "main": "src/linter.js",
@@ -28,7 +28,7 @@
         "sqrl-lint": "cli.js"
     },
     "engines": {
-        "node": "^20.19.0 || ^22.12.0 || >=23"
+        "node": ">=20.19.0"
     },
     "homepage": "https://github.com/yammm/ynode-sqrl-lint#readme",
     "repository": {
