@@ -5,6 +5,7 @@ import {
     type LintDiagnostic,
     type LintRule,
 } from "@ynode/sqrl-lint";
+import metadata from "@ynode/sqrl-lint/package.json" with { type: "json" };
 import { languages, options, parsers, printers } from "@ynode/sqrl-lint/prettier";
 
 const result = lintContent("Hello {{ it.name }}", {
@@ -25,3 +26,4 @@ if (firstRule) {
 rules.push({ name: "unsafe", pattern: /.*/u, replacement: "" });
 
 void [DEFAULT_LINT_OPTIONS, diagnostics, immutableRules, languages, options, parsers, printers];
+metadata.name satisfies string;

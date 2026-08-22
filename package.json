@@ -1,6 +1,6 @@
 {
     "name": "@ynode/sqrl-lint",
-    "version": "1.7.0+336788",
+    "version": "1.7.0+336790",
     "description": "Tag-aware linter, formatter, and Prettier plugin for Squirrelly (.sqrl) templates",
     "type": "module",
     "main": "src/linter.js",
@@ -13,7 +13,8 @@
         "./prettier": {
             "types": "./prettier.d.ts",
             "default": "./src/prettier-plugin.js"
-        }
+        },
+        "./package.json": "./package.json"
     },
     "files": [
         "src/",
@@ -63,7 +64,7 @@
         "docs": "node scripts/gen-docs.mjs",
         "docs:clean": "rimraf docs",
         "docs:open": "node -e \"import('node:child_process').then(m=>m.exec(process.platform==='win32'?'start docs/index.html':(process.platform==='darwin'?'open docs/index.html':'xdg-open docs/index.html')))\"",
-        "changelog": "auto-changelog -p && git add CHANGELOG.md",
+        "changelog": "auto-changelog -p --commit-limit false",
         "ver:preview": "npx autover --no-amend --dry-run --short",
         "ver:apply": "npx autover --guard-unchanged --short",
         "postversion": "git push && git push --tags",
