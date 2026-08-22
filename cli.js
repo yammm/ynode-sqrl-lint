@@ -514,7 +514,8 @@ async function run() {
             } else {
                 console.log(report);
             }
-        } else if (!quiet) {
+        } else {
+            // Quiet mode already returned above; text mode always reports.
             console.error(colors.red(message));
         }
         process.exitCode = 2;
