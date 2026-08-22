@@ -1,7 +1,11 @@
 import assert from "node:assert";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import test from "node:test";
 
 import { lintContent, rules } from "../src/linter.js";
+
+const execFileAsync = promisify(execFile);
 
 test("Squirrelly Linter AST Compilation suite", async (t) => {
     await t.test("Rule 1: Formats Raw Output Interpolations", () => {
@@ -227,6 +231,47 @@ test("Rules array is exported and well-formed", () => {
             `${rule.name}: replacement should be a string`,
         );
     }
+});
+
+test("Exported rules preserve their documented first-match formatting semantics", () => {
+    const cases = new Map([
+        ["  @  custom()  /  ", "@ custom() /"],
+        ["  @  custom()  ", "@ custom() "],
+        ["  #  if(true)  ", "# if(true) "],
+        ["  /  each  ", "/ each "],
+        ["  it.name  ", " it.name "],
+        ["   ", "  "],
+    ]);
+
+    for (const [input, expected] of cases) {
+        const rule = rules.find(({ pattern }) => pattern.test(input));
+        assert.ok(rule, `expected a public rule to match ${JSON.stringify(input)}`);
+        assert.strictEqual(input.replace(rule.pattern, rule.replacement), expected);
+    }
+});
+
+test("Exported rule patterns stay responsive on pathological whitespace", async () => {
+    const moduleUrl = new URL("../src/linter.js", import.meta.url).href;
+    const script = `
+        import { rules } from ${JSON.stringify(moduleUrl)};
+        const spaces = " ".repeat(50_000);
+        const inputs = ["@" + spaces, "@" + spaces + "x" + spaces];
+        for (const input of inputs) {
+            for (const rule of rules) {
+                input.replace(rule.pattern, rule.replacement);
+            }
+        }
+        process.stdout.write("ok");
+    `;
+
+    const { stdout } = await execFileAsync(
+        process.execPath,
+        ["--input-type=module", "--eval", script],
+        {
+            timeout: 3_000,
+        },
+    );
+    assert.strictEqual(stdout, "ok");
 });
 
 test("Formatting is idempotent across all tag types", async (t) => {

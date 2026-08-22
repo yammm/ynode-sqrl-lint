@@ -25,10 +25,12 @@ export { DEFAULT_LINT_OPTIONS } from "./config.js";
  * Because rules only run on content inside `{{ ... }}` / `{{{ ... }}}` boundaries,
  * they can never produce false positives on surrounding HTML, CSS, or JS.
  *
- * The table is the declarative specification of the formatter. The linter
- * applies the same semantics with a hand-written linear scan
- * ({@link applyFormattingRules}) because the stacked whitespace quantifiers
- * in these patterns backtrack catastrophically on pathological tag bodies.
+ * The table is the declarative specification of the formatter. Its public
+ * regular expressions and the linter's hand-written scan
+ * ({@link applyFormattingRules}) both preserve linear-time matching on
+ * pathological tag bodies. Every horizontal-whitespace quantifier is followed
+ * by `(?![ \t])`, which makes that trim point effectively possessive: the
+ * engine cannot redistribute the same whitespace among adjacent captures.
  *
  * @type {Array<{name: string, pattern: RegExp, replacement: string}>}
  */
@@ -44,13 +46,14 @@ export const rules = Object.freeze(
             // The prior `[@#!]` class let `{{! /* … */ }}` backtrack the
             // self-close slash onto the `*/` and split it.
             name: "helper-self-closing",
-            pattern: /^[ \t]*(@)[ \t]*(.*?)[ \t]*\/[ \t]*$/s,
+            pattern:
+                /^[ \t]*(?![ \t])(@)[ \t]*(?![ \t])(.*[^ \t]|)[ \t]*(?![ \t])\/[ \t]*(?![ \t])$/s,
             replacement: "$1 $2 /",
         },
         {
             // Helper, branch, execution, and raw-output tags.
             name: "helper-open",
-            pattern: /^[ \t]*([@#!*])[ \t]*(.*?)[ \t]*$/s,
+            pattern: /^[ \t]*(?![ \t])([@#!*])[ \t]*(?![ \t])(.*[^ \t]|)[ \t]*(?![ \t])$/s,
             replacement: "$1 $2 ",
         },
         {
@@ -66,7 +69,7 @@ export const rules = Object.freeze(
         {
             // Standard expression tags: {{ foo }}, {{ bar.baz }}
             name: "expression",
-            pattern: /^[ \t]*(.*?)[ \t]*$/s,
+            pattern: /^[ \t]*(?![ \t])(.*[^ \t]|)[ \t]*(?![ \t])$/s,
             replacement: " $1 ",
         },
     ].map((rule) => Object.freeze(rule)),

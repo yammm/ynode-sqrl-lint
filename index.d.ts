@@ -68,18 +68,18 @@ export const DEFAULT_LINT_OPTIONS: Readonly<{
  */
 export interface LintRule {
     /** Human-readable identifier for the rule */
-    name: string;
+    readonly name: string;
     /** Regex matched against the inner content of a tag (between delimiters) */
-    pattern: RegExp;
+    readonly pattern: RegExp;
     /** Replacement string (may reference capture groups) */
-    replacement: string;
+    readonly replacement: string;
 }
 
 /**
  * Declarative formatting rules applied to content within Squirrelly tags.
  * Rules are evaluated in order; the first match wins for any given tag.
  */
-export const rules: LintRule[];
+export const rules: readonly LintRule[];
 
 /**
  * Lints and safely fixes Squirrelly template formatting and semantics.
