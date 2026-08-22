@@ -130,20 +130,24 @@ test(
     },
 );
 
-test("fix mode exits 2 when a file cannot be processed", { skip: process.platform === "win32" }, () => {
-    const dir = makeTempDir();
-    const file = path.join(dir, "locked.sqrl");
-    try {
-        writeFileSync(file, "{{foo}}", "utf8");
-        chmodSync(file, 0o000);
-        const result = runCli([file, "--fix"]);
-        assert.strictEqual(result.status, 2);
-        assert.match(result.stderr, /Encountered errors while processing 1 files/);
-    } finally {
-        chmodSync(file, 0o600);
-        rmSync(dir, { recursive: true, force: true });
-    }
-});
+test(
+    "fix mode exits 2 when a file cannot be processed",
+    { skip: process.platform === "win32" },
+    () => {
+        const dir = makeTempDir();
+        const file = path.join(dir, "locked.sqrl");
+        try {
+            writeFileSync(file, "{{foo}}", "utf8");
+            chmodSync(file, 0o000);
+            const result = runCli([file, "--fix"]);
+            assert.strictEqual(result.status, 2);
+            assert.match(result.stderr, /Encountered errors while processing 1 files/);
+        } finally {
+            chmodSync(file, 0o600);
+            rmSync(dir, { recursive: true, force: true });
+        }
+    },
+);
 
 test("check mode supports --no-color output", () => {
     const dir = makeTempDir();
@@ -194,7 +198,10 @@ test("check mode supports --report json output", () => {
         assert.strictEqual(payload.results[0].file, file);
         assert.strictEqual(payload.results[0].status, "needs-formatting");
         // --diff is on by default, so diff field should be present
-        assert.ok(typeof payload.results[0].diff === "string", "diff field should be present by default");
+        assert.ok(
+            typeof payload.results[0].diff === "string",
+            "diff field should be present by default",
+        );
     } finally {
         rmSync(dir, { recursive: true, force: true });
     }
@@ -438,7 +445,11 @@ test("--no-diff excludes diff field from JSON report", () => {
         const result = runCli([file, "--report", "json", "--no-diff"]);
         assert.strictEqual(result.status, 1);
         const payload = JSON.parse(result.stdout);
-        assert.strictEqual(payload.results[0].diff, undefined, "diff field should not be present with --no-diff");
+        assert.strictEqual(
+            payload.results[0].diff,
+            undefined,
+            "diff field should not be present with --no-diff",
+        );
     } finally {
         rmSync(dir, { recursive: true, force: true });
     }
@@ -471,7 +482,11 @@ test("--report json --diff includes diff field in results", () => {
         assert.ok(payload.results[0].diff.includes("-{{foo}}"), "diff should show removed line");
         assert.ok(payload.results[0].diff.includes("+{{ foo }}"), "diff should show added line");
         // JSON diff should not contain ANSI escape codes
-        assert.strictEqual(payload.results[0].diff.includes("\x1b["), false, "diff should not contain ANSI codes");
+        assert.strictEqual(
+            payload.results[0].diff.includes("\x1b["),
+            false,
+            "diff should not contain ANSI codes",
+        );
     } finally {
         rmSync(dir, { recursive: true, force: true });
     }
@@ -581,9 +596,12 @@ test("--stdin --diff shows unified diff on stderr", () => {
 });
 
 test("--stdin --stdin-filepath uses custom path in diff header", () => {
-    const result = runCli(["--stdin", "--stdin-filepath", "views/home.sqrl", "--diff", "--no-color"], {
-        input: "{{foo}}",
-    });
+    const result = runCli(
+        ["--stdin", "--stdin-filepath", "views/home.sqrl", "--diff", "--no-color"],
+        {
+            input: "{{foo}}",
+        },
+    );
     assert.strictEqual(result.status, 1);
     assert.match(result.stderr, /views\/home\.sqrl/);
 });

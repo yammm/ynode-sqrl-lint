@@ -33,7 +33,10 @@ test("check mode fails and prints source locations for semantic diagnostics", ()
 
         assert.strictEqual(result.status, 1);
         assert.strictEqual(result.stdout, "");
-        assert.match(result.stderr, new RegExp(`${file.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}:1:4`, "u"));
+        assert.match(
+            result.stderr,
+            new RegExp(`${file.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}:1:4`, "u"),
+        );
         assert.match(result.stderr, /\[no-output-assignment\]/u);
     });
 });
@@ -96,7 +99,11 @@ test("fix mode repairs top-level logical OR and exits cleanly", () => {
 test("project configuration selects nullish fixes for files and stdin", () => {
     withTempDir((directory) => {
         const file = path.join(directory, "fallback.sqrl");
-        writeFileSync(path.join(directory, ".sqrl-lintrc.json"), JSON.stringify({ logicalOrFix: "nullish" }), "utf8");
+        writeFileSync(
+            path.join(directory, ".sqrl-lintrc.json"),
+            JSON.stringify({ logicalOrFix: "nullish" }),
+            "utf8",
+        );
         writeFileSync(file, '{{ it.value || "fallback" }}', "utf8");
 
         const fileResult = runCli([file, "--fix", "--quiet"], { cwd: directory });
@@ -116,7 +123,11 @@ test("project configuration selects nullish fixes for files and stdin", () => {
 test("the CLI loads an implicit .sqrl-lintrc.json from its working directory", () => {
     withTempDir((directory) => {
         const file = path.join(directory, "execution.sqrl");
-        writeFileSync(path.join(directory, ".sqrl-lintrc.json"), JSON.stringify({ forbidExecute: true }), "utf8");
+        writeFileSync(
+            path.join(directory, ".sqrl-lintrc.json"),
+            JSON.stringify({ forbidExecute: true }),
+            "utf8",
+        );
         writeFileSync(file, "{{! it.ready = true; }}", "utf8");
 
         const result = runCli([file, "--no-color"], { cwd: directory });
@@ -129,7 +140,11 @@ test("the CLI loads an implicit .sqrl-lintrc.json from its working directory", (
 test("--config loads a strict explicit configuration", () => {
     withTempDir((directory) => {
         const file = path.join(directory, "filter.sqrl");
-        writeFileSync(path.join(directory, "policy.json"), JSON.stringify({ knownFilters: ["date"] }), "utf8");
+        writeFileSync(
+            path.join(directory, "policy.json"),
+            JSON.stringify({ knownFilters: ["date"] }),
+            "utf8",
+        );
         writeFileSync(file, "{{ it.value | data }}", "utf8");
 
         const result = runCli([file, "--config", "policy.json", "--no-color"], { cwd: directory });
@@ -144,13 +159,21 @@ test("invalid and missing explicit configurations are operational errors", () =>
     withTempDir((directory) => {
         const file = path.join(directory, "clean.sqrl");
         writeFileSync(file, "{{ it.value }}", "utf8");
-        writeFileSync(path.join(directory, "invalid.json"), JSON.stringify({ forbidExec: true }), "utf8");
+        writeFileSync(
+            path.join(directory, "invalid.json"),
+            JSON.stringify({ forbidExec: true }),
+            "utf8",
+        );
 
-        const invalid = runCli([file, "--config", "invalid.json", "--no-color"], { cwd: directory });
+        const invalid = runCli([file, "--config", "invalid.json", "--no-color"], {
+            cwd: directory,
+        });
         assert.strictEqual(invalid.status, 2);
         assert.match(invalid.stderr, /unknown option "forbidExec"/u);
 
-        const missing = runCli([file, "--config", "missing.json", "--no-color"], { cwd: directory });
+        const missing = runCli([file, "--config", "missing.json", "--no-color"], {
+            cwd: directory,
+        });
         assert.strictEqual(missing.status, 2);
         assert.match(missing.stderr, /missing\.json/u);
     });

@@ -85,8 +85,14 @@ test("prettier can opt into nullish logical-OR fixes", async () => {
 });
 
 test("prettier rejects invalid logical-OR fix choices", async () => {
-    await assert.rejects(format('{{ it.value || "fallback" }}', { sqrlLogicalOrFix: "replace" }), (error) => {
-        assert.match(stripVTControlCharacters(error.message), /Invalid sqrlLogicalOrFix value/u);
-        return true;
-    });
+    await assert.rejects(
+        format('{{ it.value || "fallback" }}', { sqrlLogicalOrFix: "replace" }),
+        (error) => {
+            assert.match(
+                stripVTControlCharacters(error.message),
+                /Invalid sqrlLogicalOrFix value/u,
+            );
+            return true;
+        },
+    );
 });

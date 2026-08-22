@@ -73,8 +73,14 @@ function describeTag(inner, isTriple) {
     }
 
     const candidatePrefix = TAG_PREFIXES.has(inner[contentStart]) ? inner[contentStart] : "";
-    const contentWithoutControls = inner.slice(inner[0] === "-" || inner[0] === "_" ? 1 : 0, bodyEnd);
-    const prefix = candidatePrefix === "/" && !BLOCK_CLOSE_PATTERN.test(contentWithoutControls) ? "" : candidatePrefix;
+    const contentWithoutControls = inner.slice(
+        inner[0] === "-" || inner[0] === "_" ? 1 : 0,
+        bodyEnd,
+    );
+    const prefix =
+        candidatePrefix === "/" && !BLOCK_CLOSE_PATTERN.test(contentWithoutControls)
+            ? ""
+            : candidatePrefix;
     const prefixIndex = prefix ? contentStart : -1;
     let bodyStart = prefix ? contentStart + 1 : contentStart;
     while (bodyStart < bodyEnd && /\s/u.test(inner[bodyStart])) {
@@ -205,9 +211,13 @@ function splitExpressionAndFilters(body) {
     const operators = findFilterDepthOperators(body, ["||=", "|=", "||", "|"]);
     const leadingWhitespace = /^\s*/u.exec(body)?.[0].length ?? 0;
     const leadingRegexEnd =
-        body[leadingWhitespace] === "/" ? skipRegexLiteral(body, leadingWhitespace) : leadingWhitespace;
+        body[leadingWhitespace] === "/"
+            ? skipRegexLiteral(body, leadingWhitespace)
+            : leadingWhitespace;
     const protectedRegexEnd = leadingRegexEnd > leadingWhitespace + 1 ? leadingRegexEnd : 0;
-    const filterPipes = operators.filter(({ index, operator }) => operator === "|" && index >= protectedRegexEnd);
+    const filterPipes = operators.filter(
+        ({ index, operator }) => operator === "|" && index >= protectedRegexEnd,
+    );
     const expressionEnd = filterPipes[0]?.index ?? body.length;
     const filters = [];
     const invalidFilters = [];
@@ -224,7 +234,9 @@ function splitExpressionAndFilters(body) {
         }
         const nameMatch = /^([A-Za-z_$][\w$.-]*)/u.exec(segment.slice(segmentCursor));
         const name = nameMatch?.[1];
-        const remainder = name ? segment.slice(segmentCursor + name.length) : segment.slice(segmentCursor);
+        const remainder = name
+            ? segment.slice(segmentCursor + name.length)
+            : segment.slice(segmentCursor);
 
         if (name && hasValidFilterArguments(remainder)) {
             filters.push({
@@ -279,7 +291,9 @@ function parseJavaScriptExpression(expression, asyncMode) {
             preserveParens: true,
             onToken: tokens,
         });
-        const remainder = tokenizer(expression.slice(ast.end), { ecmaVersion: "latest" }).getToken();
+        const remainder = tokenizer(expression.slice(ast.end), {
+            ecmaVersion: "latest",
+        }).getToken();
         if (remainder.type.label !== "eof") {
             return undefined;
         }
@@ -328,7 +342,9 @@ function visitSyntaxNodes(value, visitor) {
  */
 function applySourceEdits(source, edits) {
     let result = source;
-    const ordered = [...edits].sort((left, right) => right.start - left.start || right.end - left.end);
+    const ordered = [...edits].sort(
+        (left, right) => right.start - left.start || right.end - left.end,
+    );
 
     for (const edit of ordered) {
         result = result.slice(0, edit.start) + edit.text + result.slice(edit.end);
@@ -347,7 +363,10 @@ function applySourceEdits(source, edits) {
  * @returns {string | undefined} Rewritten expression, or undefined when a safe rewrite is ambiguous
  */
 function rewriteLogicalOrAsNullish(expression, exposedOperators, asyncMode) {
-    if (exposedOperators.length === 0 || exposedOperators.some(({ operator }) => operator !== "||")) {
+    if (
+        exposedOperators.length === 0 ||
+        exposedOperators.some(({ operator }) => operator !== "||")
+    ) {
         return undefined;
     }
 
@@ -384,12 +403,18 @@ function rewriteLogicalOrAsNullish(expression, exposedOperators, asyncMode) {
     if (
         logicalOrTokens.size !== exposedOperators.length ||
         nodesByOperator.size !== exposedOperators.length ||
-        exposedOperators.some(({ index }) => !logicalOrTokens.has(index) || !nodesByOperator.has(index))
+        exposedOperators.some(
+            ({ index }) => !logicalOrTokens.has(index) || !nodesByOperator.has(index),
+        )
     ) {
         return undefined;
     }
 
-    const edits = exposedOperators.map(({ index }) => ({ start: index, end: index + 2, text: "??" }));
+    const edits = exposedOperators.map(({ index }) => ({
+        start: index,
+        end: index + 2,
+        text: "??",
+    }));
     const parenthesizedRanges = new Set();
 
     for (const node of nodesByOperator.values()) {
@@ -429,7 +454,8 @@ export function fixTagSafety(source, inner, innerStart, isTriple, options, conte
     let result = inner;
     let description = describeTag(result, isTriple);
     const controlStart = result[0] === "-" || result[0] === "_" ? 1 : 0;
-    const leadingWhitespace = /^\s*/u.exec(result.slice(controlStart, description.bodyEnd))?.[0] ?? "";
+    const leadingWhitespace =
+        /^\s*/u.exec(result.slice(controlStart, description.bodyEnd))?.[0] ?? "";
 
     if (leadingWhitespace && result[controlStart + leadingWhitespace.length] === "!") {
         diagnostics.push(
@@ -447,7 +473,10 @@ export function fixTagSafety(source, inner, innerStart, isTriple, options, conte
         const asyncPrefix = options.async ? (/^async +/u.exec(rawBody)?.[0] ?? "") : "";
         const body = rawBody.slice(asyncPrefix.length);
         const invalidBranch = /^(else\s+if|elseif|elf)(?=\s*(?:\(|$))/u.exec(body);
-        if (invalidBranch && (context.parentHelper === "if" || context.parentHelper === undefined)) {
+        if (
+            invalidBranch &&
+            (context.parentHelper === "if" || context.parentHelper === undefined)
+        ) {
             const normalizedSpelling = invalidBranch[1].replace(/\s+/gu, " ");
             const fixable =
                 context.parentHelper === "if" &&
@@ -479,10 +508,13 @@ export function fixTagSafety(source, inner, innerStart, isTriple, options, conte
         let expression = body.slice(0, expressionEnd);
         const expressionWhitespace = /^\s*/u.exec(expression)?.[0].length ?? 0;
         const regexStart = expressionWhitespace;
-        const regexEnd = expression[regexStart] === "/" ? skipRegexLiteral(expression, regexStart) : regexStart;
+        const regexEnd =
+            expression[regexStart] === "/" ? skipRegexLiteral(expression, regexStart) : regexStart;
 
         if (!isTriple && description.prefix === "" && regexEnd > regexStart + 1) {
-            const regexContainsCloseDelimiter = expression.slice(regexStart, regexEnd).includes("}}");
+            const regexContainsCloseDelimiter = expression
+                .slice(regexStart, regexEnd)
+                .includes("}}");
             diagnostics.push(
                 diagnostic(
                     source,
@@ -563,7 +595,10 @@ export function fixTagSafety(source, inner, innerStart, isTriple, options, conte
                         true,
                     ),
                 );
-                const replacement = split.expression.replace(expressionText, `${expressionText} ?? ""`);
+                const replacement = split.expression.replace(
+                    expressionText,
+                    `${expressionText} ?? ""`,
+                );
                 result =
                     result.slice(0, description.bodyStart) +
                     replacement +
@@ -822,7 +857,10 @@ function suggestFilter(unknown, candidates) {
     const normalizedUnknown = unknown.toLowerCase();
     const prefixCandidates = candidates.filter((candidate) => {
         const normalizedCandidate = candidate.toLowerCase();
-        return normalizedCandidate.startsWith(normalizedUnknown) || normalizedUnknown.startsWith(normalizedCandidate);
+        return (
+            normalizedCandidate.startsWith(normalizedUnknown) ||
+            normalizedUnknown.startsWith(normalizedCandidate)
+        );
     });
     const candidatesToRank = prefixCandidates.length > 0 ? prefixCandidates : candidates;
     let best;
@@ -838,7 +876,8 @@ function suggestFilter(unknown, candidates) {
     if (!best) {
         return undefined;
     }
-    return bestDistance <= Math.max(2, Math.floor(unknown.length * 0.4)) || prefixCandidates.length > 0
+    return bestDistance <= Math.max(2, Math.floor(unknown.length * 0.4)) ||
+        prefixCandidates.length > 0
         ? best
         : undefined;
 }
@@ -854,8 +893,13 @@ function compileErrorMessage(error) {
     const lines = raw
         .split(/\r?\n/u)
         .map((line) => line.trim())
-        .filter((line) => line && !/^=+$/u.test(line) && !/^\^$/u.test(line) && !line.startsWith("var tR="));
-    return lines.length > 1 && lines[0] === "Bad template syntax" ? `${lines[0]}: ${lines[1]}` : lines[0] || raw;
+        .filter(
+            (line) =>
+                line && !/^=+$/u.test(line) && !/^\^$/u.test(line) && !line.startsWith("var tR="),
+        );
+    return lines.length > 1 && lines[0] === "Bad template syntax"
+        ? `${lines[0]}: ${lines[1]}`
+        : lines[0] || raw;
 }
 
 /**
@@ -891,7 +935,9 @@ function indexFromLocation(source, line, column) {
 export function analyzeTemplateSafety(source, options) {
     const diagnostics = [];
     const { tags, unclosedIndex } = scanTags(source);
-    const knownFilters = options.knownFilters ? new Set([...BUILT_IN_FILTERS, ...options.knownFilters]) : undefined;
+    const knownFilters = options.knownFilters
+        ? new Set([...BUILT_IN_FILTERS, ...options.knownFilters])
+        : undefined;
     const unsafeFilters = new Set(options.unsafeRawFilters);
     const helperStack = [];
 
@@ -913,7 +959,9 @@ export function analyzeTemplateSafety(source, options) {
         if (!tag.isOutput) {
             const logicalOr = findFilterDepthOperators(body, ["||"])[0];
             const isCommentText =
-                tag.isExecution && logicalOr && !maskStringsAndComments(body).startsWith("||", logicalOr.index);
+                tag.isExecution &&
+                logicalOr &&
+                !maskStringsAndComments(body).startsWith("||", logicalOr.index);
             if (logicalOr && !isCommentText) {
                 diagnostics.push(
                     diagnostic(
@@ -940,7 +988,8 @@ export function analyzeTemplateSafety(source, options) {
 
         for (const invalidFilter of split.invalidFilters) {
             const normalizedText = invalidFilter.text.replace(/\s+/gu, " ");
-            const preview = normalizedText.length > 60 ? `${normalizedText.slice(0, 57)}...` : normalizedText;
+            const preview =
+                normalizedText.length > 60 ? `${normalizedText.slice(0, 57)}...` : normalizedText;
             diagnostics.push(
                 diagnostic(
                     source,
@@ -975,7 +1024,9 @@ export function analyzeTemplateSafety(source, options) {
             );
         }
 
-        const safeFilterIndex = split.filters.findIndex(({ name, async }) => name === "safe" && !async);
+        const safeFilterIndex = split.filters.findIndex(
+            ({ name, async }) => name === "safe" && !async,
+        );
         if (options.forbidSafe && safeFilterIndex !== -1) {
             const filter = split.filters[safeFilterIndex];
             diagnostics.push(
@@ -1008,12 +1059,15 @@ export function analyzeTemplateSafety(source, options) {
         const isRawOutput = tag.isTriple || tag.prefix === "*" || safeFilterIndex !== -1;
         if (tag.isOutput && isRawOutput) {
             const unsafeFilter = split.filters.find(
-                ({ name, async }) => name !== "safe" && unsafeFilters.has(name) && (!async || options.async),
+                ({ name, async }) =>
+                    name !== "safe" && unsafeFilters.has(name) && (!async || options.async),
             );
             const maskedExpression = maskStringsAndComments(split.expression, true);
             const rawJson = /\bJSON\s*\.\s*stringify\s*\(/u.test(maskedExpression);
             if (rawJson || unsafeFilter) {
-                const unsafeName = rawJson ? "JSON.stringify(...)" : `the \`${unsafeFilter.name}\` filter`;
+                const unsafeName = rawJson
+                    ? "JSON.stringify(...)"
+                    : `the \`${unsafeFilter.name}\` filter`;
                 diagnostics.push(
                     diagnostic(
                         source,
@@ -1090,7 +1144,12 @@ export function analyzeTemplateSafety(source, options) {
                     );
                 } else if (branchName === "elif" && currentHelper.seenElse) {
                     diagnostics.push(
-                        diagnostic(source, ruleIndex, "valid-native-branch", "`elif` cannot appear after `else`."),
+                        diagnostic(
+                            source,
+                            ruleIndex,
+                            "valid-native-branch",
+                            "`elif` cannot appear after `else`.",
+                        ),
                     );
                 } else if (branchName === "else" && currentHelper.seenElse) {
                     diagnostics.push(
@@ -1105,12 +1164,22 @@ export function analyzeTemplateSafety(source, options) {
 
                 if (branchName === "elif" && !branchMatch[2]?.trim()) {
                     diagnostics.push(
-                        diagnostic(source, ruleIndex, "valid-native-branch", "`elif` requires a condition."),
+                        diagnostic(
+                            source,
+                            ruleIndex,
+                            "valid-native-branch",
+                            "`elif` requires a condition.",
+                        ),
                     );
                 }
                 if (branchName === "else" && branchMatch[2] !== undefined) {
                     diagnostics.push(
-                        diagnostic(source, ruleIndex, "valid-native-branch", "`else` does not accept a condition."),
+                        diagnostic(
+                            source,
+                            ruleIndex,
+                            "valid-native-branch",
+                            "`else` does not accept a condition.",
+                        ),
                     );
                 }
                 if (branchName === "else") {
@@ -1158,19 +1227,24 @@ export function analyzeTemplateCompilation(originalSource, finalizedSource, enab
 
     const originalError = getCompileError(originalSource, asyncMode);
     const finalizedError =
-        finalizedSource === originalSource ? originalError : getCompileError(finalizedSource, asyncMode);
+        finalizedSource === originalSource
+            ? originalError
+            : getCompileError(finalizedSource, asyncMode);
     if (!finalizedError) {
         return [];
     }
 
     const { unclosedIndex } = scanTags(originalSource);
-    const finalizedMessage = finalizedError instanceof Error ? finalizedError.message : String(finalizedError);
+    const finalizedMessage =
+        finalizedError instanceof Error ? finalizedError.message : String(finalizedError);
     if (unclosedIndex !== undefined && /unclosed/iu.test(finalizedMessage)) {
         return [];
     }
 
-    const originalMessage = originalError instanceof Error ? originalError.message : String(originalError ?? "");
-    const sameFailure = originalError && compileErrorMessage(originalError) === compileErrorMessage(finalizedError);
+    const originalMessage =
+        originalError instanceof Error ? originalError.message : String(originalError ?? "");
+    const sameFailure =
+        originalError && compileErrorMessage(originalError) === compileErrorMessage(finalizedError);
     const match = sameFailure ? / at line (\d+) col (\d+):/u.exec(originalMessage) : undefined;
     const index = match ? indexFromLocation(originalSource, Number(match[1]), Number(match[2])) : 0;
 

@@ -270,8 +270,13 @@ export function findCloseDelimiter(source, innerStart, closeDelimiter) {
     // A slash-prefixed block identifier is the one deliberate ambiguity with
     // a leading regex literal. Recognise the complete block-close grammar
     // before running JavaScript lexical classification.
-    const isBlockCloseCandidate = BLOCK_CLOSE_PATTERN.test(source.slice(innerStart, firstCloseIndex));
-    if (isBlockCloseCandidate && isAmbiguousLeadingRegex(source, innerStart, firstCloseIndex, closeDelimiter)) {
+    const isBlockCloseCandidate = BLOCK_CLOSE_PATTERN.test(
+        source.slice(innerStart, firstCloseIndex),
+    );
+    if (
+        isBlockCloseCandidate &&
+        isAmbiguousLeadingRegex(source, innerStart, firstCloseIndex, closeDelimiter)
+    ) {
         return AMBIGUOUS_CLOSE_DELIMITER;
     }
     if (isBlockCloseCandidate) {

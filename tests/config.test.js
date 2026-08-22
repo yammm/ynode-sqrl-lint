@@ -122,7 +122,8 @@ test("a missing explicit config is an error that includes its resolved path", as
         const expectedPath = path.join(directory, "missing.json");
         await assert.rejects(
             loadLintOptions({ cwd: directory, configPath: "missing.json" }),
-            (error) => error.message.includes(expectedPath) && /could not read file/u.test(error.message),
+            (error) =>
+                error.message.includes(expectedPath) && /could not read file/u.test(error.message),
         );
     });
 });
@@ -159,7 +160,8 @@ test("rejects unknown options", async () => {
         const configPath = await writeConfig(directory, { compile: true, typo: false });
         await assert.rejects(
             loadLintOptions({ cwd: directory }),
-            (error) => error.message.includes(configPath) && /unknown option "typo"/u.test(error.message),
+            (error) =>
+                error.message.includes(configPath) && /unknown option "typo"/u.test(error.message),
         );
     });
 });
@@ -172,7 +174,8 @@ test("rejects non-boolean boolean options", async (t) => {
                 await assert.rejects(
                     loadLintOptions({ cwd: directory }),
                     (error) =>
-                        error.message.includes(configPath) && error.message.includes(`"${key}" must be a boolean`),
+                        error.message.includes(configPath) &&
+                        error.message.includes(`"${key}" must be a boolean`),
                 );
             });
         });
@@ -188,7 +191,9 @@ test("rejects invalid logical-OR fix strategies", async (t) => {
                     loadLintOptions({ cwd: directory }),
                     (error) =>
                         error.message.includes(configPath) &&
-                        /"logicalOrFix" must be either "parenthesize" or "nullish"/u.test(error.message),
+                        /"logicalOrFix" must be either "parenthesize" or "nullish"/u.test(
+                            error.message,
+                        ),
                 );
             });
         });
@@ -197,13 +202,37 @@ test("rejects invalid logical-OR fix strategies", async (t) => {
 
 test("rejects invalid filter list shapes and entries", async (t) => {
     const cases = [
-        ["knownFilters must be an array", { knownFilters: "date" }, /"knownFilters" must be an array/u],
-        ["unsafe filters must be an array", { unsafeRawFilters: {} }, /"unsafeRawFilters" must be an array/u],
-        ["filter names must be strings", { knownFilters: [1] }, /"knownFilters\[0\]" must be a non-empty string/u],
+        [
+            "knownFilters must be an array",
+            { knownFilters: "date" },
+            /"knownFilters" must be an array/u,
+        ],
+        [
+            "unsafe filters must be an array",
+            { unsafeRawFilters: {} },
+            /"unsafeRawFilters" must be an array/u,
+        ],
+        [
+            "filter names must be strings",
+            { knownFilters: [1] },
+            /"knownFilters\[0\]" must be a non-empty string/u,
+        ],
         ["empty names are invalid", { unsafeRawFilters: [""] }, /must be a non-empty string/u],
-        ["whitespace-only names are invalid", { knownFilters: ["  "] }, /must be a non-empty string/u],
-        ["surrounding whitespace is invalid", { knownFilters: [" date "] }, /surrounding whitespace/u],
-        ["filter syntax is validated", { knownFilters: ["date input"] }, /valid Squirrelly filter name/u],
+        [
+            "whitespace-only names are invalid",
+            { knownFilters: ["  "] },
+            /must be a non-empty string/u,
+        ],
+        [
+            "surrounding whitespace is invalid",
+            { knownFilters: [" date "] },
+            /surrounding whitespace/u,
+        ],
+        [
+            "filter syntax is validated",
+            { knownFilters: ["date input"] },
+            /valid Squirrelly filter name/u,
+        ],
     ];
 
     for (const [name, value, messagePattern] of cases) {
@@ -212,7 +241,8 @@ test("rejects invalid filter list shapes and entries", async (t) => {
                 const configPath = await writeConfig(directory, value);
                 await assert.rejects(
                     loadLintOptions({ cwd: directory }),
-                    (error) => error.message.includes(configPath) && messagePattern.test(error.message),
+                    (error) =>
+                        error.message.includes(configPath) && messagePattern.test(error.message),
                 );
             });
         });
@@ -227,7 +257,8 @@ test("rejects duplicate names independently in each filter list", async (t) => {
                 await assert.rejects(
                     loadLintOptions({ cwd: directory }),
                     (error) =>
-                        error.message.includes(configPath) && /duplicate filter name "json"/u.test(error.message),
+                        error.message.includes(configPath) &&
+                        /duplicate filter name "json"/u.test(error.message),
                 );
             });
         });

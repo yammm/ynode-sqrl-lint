@@ -87,10 +87,16 @@ function readFilterList(config, key, configFilePath) {
             throw configError(configFilePath, `"${key}[${index}]" must be a non-empty string.`);
         }
         if (name !== name.trim()) {
-            throw configError(configFilePath, `"${key}[${index}]" must not contain surrounding whitespace.`);
+            throw configError(
+                configFilePath,
+                `"${key}[${index}]" must not contain surrounding whitespace.`,
+            );
         }
         if (!/^[A-Za-z_$][\w$.-]*$/u.test(name)) {
-            throw configError(configFilePath, `"${key}[${index}]" must be a valid Squirrelly filter name.`);
+            throw configError(
+                configFilePath,
+                `"${key}[${index}]" must be a valid Squirrelly filter name.`,
+            );
         }
         if (seen.has(name)) {
             throw configError(configFilePath, `"${key}" contains duplicate filter name "${name}".`);
@@ -130,7 +136,10 @@ function validateConfig(parsed, configFilePath) {
         Object.hasOwn(parsed, "logicalOrFix") &&
         (typeof parsed.logicalOrFix !== "string" || !LOGICAL_OR_FIX_VALUES.has(parsed.logicalOrFix))
     ) {
-        throw configError(configFilePath, '"logicalOrFix" must be either "parenthesize" or "nullish".');
+        throw configError(
+            configFilePath,
+            '"logicalOrFix" must be either "parenthesize" or "nullish".',
+        );
     }
 
     const knownFilters = readFilterList(parsed, FILTER_LIST_KEYS[0], configFilePath);
@@ -140,7 +149,8 @@ function validateConfig(parsed, configFilePath) {
         async: parsed.async ?? DEFAULT_LINT_OPTIONS.async,
         logicalOrFix: parsed.logicalOrFix ?? DEFAULT_LINT_OPTIONS.logicalOrFix,
         unsafeRawFilters: unsafeRawFilters ?? [...DEFAULT_LINT_OPTIONS.unsafeRawFilters],
-        noImplicitNullOutput: parsed.noImplicitNullOutput ?? DEFAULT_LINT_OPTIONS.noImplicitNullOutput,
+        noImplicitNullOutput:
+            parsed.noImplicitNullOutput ?? DEFAULT_LINT_OPTIONS.noImplicitNullOutput,
         forbidExecute: parsed.forbidExecute ?? DEFAULT_LINT_OPTIONS.forbidExecute,
         forbidSafe: parsed.forbidSafe ?? DEFAULT_LINT_OPTIONS.forbidSafe,
     };

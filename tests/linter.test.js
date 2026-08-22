@@ -53,7 +53,11 @@ test("Squirrelly Linter AST Compilation suite", async (t) => {
         // `{{! /* … * /}}`.
         const input = "{{! /* This is a valid comment */ }}";
         const result = lintContent(input);
-        assert.strictEqual(result.content, input, "execution comment containing */ must round-trip unchanged");
+        assert.strictEqual(
+            result.content,
+            input,
+            "execution comment containing */ must round-trip unchanged",
+        );
         assert.strictEqual(result.changed, false);
 
         // The same content with no leading space inside is also preserved.
@@ -129,9 +133,17 @@ test("Close-delimiter scanner respects nested JavaScript syntax", async (t) => {
         ["single-quoted delimiter", "{{'literal }} text'}}", "{{ 'literal }} text' }}"],
         ["escaped quote delimiter", '{{"escaped \\" }} text"}}', '{{ "escaped \\" }} text" }}'],
         ["block-comment delimiter", "{{fn(/* }} */ value)}}", "{{ fn(/* }} */ value) }}"],
-        ["line-comment delimiter", "{{fn(\n// }} ignored\nvalue\n)}}", "{{ fn(\n// }} ignored\nvalue\n) }}"],
+        [
+            "line-comment delimiter",
+            "{{fn(\n// }} ignored\nvalue\n)}}",
+            "{{ fn(\n// }} ignored\nvalue\n) }}",
+        ],
         ["escaped regex delimiter", "{{/\\}\\}/.test(value)}}", "{{ (/\\}\\}/.test(value)) }}"],
-        ["nested template expression", '{{`${({ value: "}}" }).value}`}}', '{{ `${({ value: "}}" }).value}` }}'],
+        [
+            "nested template expression",
+            '{{`${({ value: "}}" }).value}`}}',
+            '{{ `${({ value: "}}" }).value}` }}',
+        ],
         ["raw-output nested braces", "{{*({a:{b:1}})}}", "{{* ({a:{b:1}}) }}"],
     ];
 
@@ -147,7 +159,10 @@ test("Close-delimiter scanner respects nested JavaScript syntax", async (t) => {
 test("Execution tags treat JavaScript block comments as opaque", () => {
     const input = "{{! /* TODO: ignore {{name}} while disabled */ }}{{next}}";
     const result = lintContent(input);
-    assert.strictEqual(result.content, "{{! /* TODO: ignore {{name}} while disabled */ }}{{ next }}");
+    assert.strictEqual(
+        result.content,
+        "{{! /* TODO: ignore {{name}} while disabled */ }}{{ next }}",
+    );
     assert.strictEqual(lintContent(result.content).changed, false);
 });
 
@@ -207,7 +222,10 @@ test("Rules array is exported and well-formed", () => {
         assert.ok(Object.isFrozen(rule), `${rule.name}: rule should be immutable`);
         assert.ok(typeof rule.name === "string", `rule name should be a string`);
         assert.ok(rule.pattern instanceof RegExp, `${rule.name}: pattern should be a RegExp`);
-        assert.ok(typeof rule.replacement === "string", `${rule.name}: replacement should be a string`);
+        assert.ok(
+            typeof rule.replacement === "string",
+            `${rule.name}: replacement should be a string`,
+        );
     }
 });
 
@@ -231,7 +249,11 @@ test("Formatting is idempotent across all tag types", async (t) => {
         await t.test(`idempotent: ${JSON.stringify(input).slice(0, 50)}`, () => {
             const first = lintContent(input);
             const second = lintContent(first.content);
-            assert.strictEqual(second.changed, false, `Second pass should not change output for: ${input}`);
+            assert.strictEqual(
+                second.changed,
+                false,
+                `Second pass should not change output for: ${input}`,
+            );
             assert.strictEqual(second.content, first.content);
         });
     }

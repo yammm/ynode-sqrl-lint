@@ -78,7 +78,10 @@ test("rewrites every exposed logical OR in compound expressions", () => {
 
         assert.strictEqual(result.content, expected);
         assert.deepStrictEqual(ruleIds(result), ["no-unparenthesized-logical-or"]);
-        assert.deepStrictEqual(lintContent(result.content, { logicalOrFix: "nullish" }).diagnostics, []);
+        assert.deepStrictEqual(
+            lintContent(result.content, { logicalOrFix: "nullish" }).diagnostics,
+            [],
+        );
     }
 });
 
@@ -93,7 +96,10 @@ test("parenthesizes AND operands when nullish mode would otherwise create invali
 
         assert.strictEqual(result.content, expected);
         assert.deepStrictEqual(ruleIds(result), ["no-unparenthesized-logical-or"]);
-        assert.deepStrictEqual(lintContent(result.content, { logicalOrFix: "nullish" }).diagnostics, []);
+        assert.deepStrictEqual(
+            lintContent(result.content, { logicalOrFix: "nullish" }).diagnostics,
+            [],
+        );
     }
 });
 
@@ -115,7 +121,10 @@ test("nullish mode falls back to parser protection for OR-like syntax it cannot 
     assert.deepStrictEqual(ruleIds(regex), ["no-unparenthesized-logical-or"]);
     assert.match(regex.diagnostics[0].message, /could not be safely rewritten/u);
     assert.strictEqual(assignment.content, '{{ (it.page ||= "dashboard") }}');
-    assert.deepStrictEqual(ruleIds(assignment), ["no-output-assignment", "no-unparenthesized-logical-or"]);
+    assert.deepStrictEqual(ruleIds(assignment), [
+        "no-output-assignment",
+        "no-unparenthesized-logical-or",
+    ]);
     assert.doesNotMatch(assignment.content, /\?\?=/u);
 });
 
@@ -123,8 +132,14 @@ test("nullish mode does not claim a partial JavaScript parse as a successful rew
     const result = lintContent("{{ it.a || it.b garbage }}", { logicalOrFix: "nullish" });
 
     assert.strictEqual(result.content, "{{ (it.a || it.b garbage) }}");
-    assert.deepStrictEqual(ruleIds(result), ["valid-squirrelly-syntax", "no-unparenthesized-logical-or"]);
-    assert.match(diagnosticsFor(result, "no-unparenthesized-logical-or")[0].message, /could not be safely rewritten/u);
+    assert.deepStrictEqual(ruleIds(result), [
+        "valid-squirrelly-syntax",
+        "no-unparenthesized-logical-or",
+    ]);
+    assert.match(
+        diagnosticsFor(result, "no-unparenthesized-logical-or")[0].message,
+        /could not be safely rewritten/u,
+    );
 });
 
 test("wraps the expression before preserving a filter chain", () => {
@@ -136,7 +151,10 @@ test("wraps the expression before preserving a filter chain", () => {
 test("detects filter-depth OR inside arrays and objects", () => {
     for (const [input, expected] of [
         ['{{ [it.value || "fallback"] }}', '{{ ([it.value || "fallback"]) }}'],
-        ['{{ { value: it.value || "fallback" }.value }}', '{{ ({ value: it.value || "fallback" }.value) }}'],
+        [
+            '{{ { value: it.value || "fallback" }.value }}',
+            '{{ ({ value: it.value || "fallback" }.value) }}',
+        ],
     ]) {
         const result = lintContent(input);
         assert.strictEqual(result.content, expected);
@@ -195,8 +213,14 @@ test("does not let whitespace disguise an execution prefix", () => {
     assert.strictEqual(ambiguous.content, "{{ !it.enabled }}");
     assert.deepStrictEqual(ruleIds(ambiguous), ["no-ambiguous-leading-prefix"]);
     assert.strictEqual(ambiguous.diagnostics[0].fixable, false);
-    assert.deepStrictEqual(diagnosticsFor(lintContent("{{! it.enabled = true; }}"), "no-ambiguous-leading-prefix"), []);
-    assert.deepStrictEqual(diagnosticsFor(lintContent("{{ (!it.enabled) }}"), "no-ambiguous-leading-prefix"), []);
+    assert.deepStrictEqual(
+        diagnosticsFor(lintContent("{{! it.enabled = true; }}"), "no-ambiguous-leading-prefix"),
+        [],
+    );
+    assert.deepStrictEqual(
+        diagnosticsFor(lintContent("{{ (!it.enabled) }}"), "no-ambiguous-leading-prefix"),
+        [],
+    );
 });
 
 test("parenthesizes a leading regex expression that resembles a block close", () => {
@@ -226,8 +250,14 @@ test("does not claim it can repair a regex containing the active close delimiter
 });
 
 test("ignores logical-OR text inside execution line comments", () => {
-    for (const input of ["{{! // documented a || b }}ok", "{{! const value = 1; // documented a || b }}ok"]) {
-        assert.strictEqual(diagnosticsFor(lintContent(input), "no-unparenthesized-logical-or").length, 0);
+    for (const input of [
+        "{{! // documented a || b }}ok",
+        "{{! const value = 1; // documented a || b }}ok",
+    ]) {
+        assert.strictEqual(
+            diagnosticsFor(lintContent(input), "no-unparenthesized-logical-or").length,
+            0,
+        );
     }
 });
 
@@ -327,7 +357,10 @@ test("does not promote assignments nested inside callbacks or calls", () => {
 test("retains output-mutation diagnostics when a logical assignment also needs parser protection", () => {
     const result = lintContent('{{ it.page ||= "dashboard" }}');
     assert.strictEqual(result.content, '{{ (it.page ||= "dashboard") }}');
-    assert.deepStrictEqual(ruleIds(result), ["no-output-assignment", "no-unparenthesized-logical-or"]);
+    assert.deepStrictEqual(ruleIds(result), [
+        "no-output-assignment",
+        "no-unparenthesized-logical-or",
+    ]);
 });
 
 test("does not mistake comparisons or arrows for output assignments", () => {
@@ -456,7 +489,10 @@ test("formats Squirrelly raw-output tags with an attached prefix", () => {
     const result = lintContent("{{ *it.html }}");
     assert.strictEqual(result.content, "{{* it.html }}");
     assert.deepStrictEqual(result.diagnostics, []);
-    assert.strictEqual(render(result.content, { html: "<strong>ok</strong>" }), "<strong>ok</strong>");
+    assert.strictEqual(
+        render(result.content, { html: "<strong>ok</strong>" }),
+        "<strong>ok</strong>",
+    );
 });
 
 test("reports unknown configured filters with a conservative suggestion", () => {
@@ -507,7 +543,10 @@ test("finds unsafe JSON calls inside template-literal expressions", () => {
 });
 
 test("does not inspect JSON-looking text inside string literals", () => {
-    for (const input of ['{{ "JSON.stringify(value)" | safe }}', "{{* /JSON.stringify(x)/.source }}"]) {
+    for (const input of [
+        '{{ "JSON.stringify(value)" | safe }}',
+        "{{* /JSON.stringify(x)/.source }}",
+    ]) {
         const result = lintContent(input);
         assert.strictEqual(diagnosticsFor(result, "no-unsafe-raw-json").length, 0, input);
     }
@@ -531,7 +570,9 @@ test("optional null-output protection is opt-in and fixable", () => {
     assert.strictEqual(diagnosticsFor(questionText, "no-implicit-null-output").length, 0);
 
     for (const filter of ["safe", "e"]) {
-        const filtered = lintContent(`{{ it.user?.title | ${filter} }}`, { noImplicitNullOutput: true });
+        const filtered = lintContent(`{{ it.user?.title | ${filter} }}`, {
+            noImplicitNullOutput: true,
+        });
         assert.strictEqual(filtered.content, `{{ it.user?.title ?? "" | ${filter} }}`);
     }
 
@@ -602,7 +643,10 @@ test("all diagnostics stay anchored to the original input after earlier formatti
 
 test("diagnostics are returned in source order", () => {
     const result = lintContent('{{ it.a = 1 }}\n{{ it.b || "x" }}');
-    assert.deepStrictEqual(ruleIds(result), ["no-output-assignment", "no-unparenthesized-logical-or"]);
+    assert.deepStrictEqual(ruleIds(result), [
+        "no-output-assignment",
+        "no-unparenthesized-logical-or",
+    ]);
     assert.ok(result.diagnostics[0].index < result.diagnostics[1].index);
 });
 

@@ -1,6 +1,15 @@
 import { DEFAULT_LINT_OPTIONS } from "./config.js";
-import { analyzeTemplateCompilation, analyzeTemplateSafety, fixTagSafety, getTagNesting } from "./safety.js";
-import { AMBIGUOUS_CLOSE_DELIMITER, BLOCK_CLOSE_PATTERN, findCloseDelimiter } from "./tag-scanner.js";
+import {
+    analyzeTemplateCompilation,
+    analyzeTemplateSafety,
+    fixTagSafety,
+    getTagNesting,
+} from "./safety.js";
+import {
+    AMBIGUOUS_CLOSE_DELIMITER,
+    BLOCK_CLOSE_PATTERN,
+    findCloseDelimiter,
+} from "./tag-scanner.js";
 
 export { DEFAULT_LINT_OPTIONS } from "./config.js";
 
@@ -68,7 +77,8 @@ export const rules = Object.freeze(
 function formatTagContent(inner) {
     const openingControl = inner[0] === "-" || inner[0] === "_" ? inner[0] : "";
     const contentStart = openingControl ? 1 : 0;
-    const hasClosingControl = inner.length > contentStart && (inner.at(-1) === "-" || inner.at(-1) === "_");
+    const hasClosingControl =
+        inner.length > contentStart && (inner.at(-1) === "-" || inner.at(-1) === "_");
     const closingControl = hasClosingControl ? inner.at(-1) : "";
     const contentEnd = hasClosingControl ? inner.length - 1 : inner.length;
     const content = inner.slice(contentStart, contentEnd);
@@ -91,7 +101,9 @@ function formatTagContent(inner) {
             // Do not add horizontal whitespace immediately before an opening
             // newline. `{{\nvalue\n}}` previously became `{{ \nvalue\n }}`,
             // creating trailing whitespace on the opening-delimiter line.
-            const cleaned = formatted.replace(/^([@#!/*]?)[ \t]+(?=\r?\n)/u, "$1").replace(/(\r?\n)[ \t]+$/u, "$1");
+            const cleaned = formatted
+                .replace(/^([@#!/*]?)[ \t]+(?=\r?\n)/u, "$1")
+                .replace(/(\r?\n)[ \t]+$/u, "$1");
             return openingControl + cleaned + closingControl;
         }
     }
@@ -114,8 +126,12 @@ export function lintContent(originalContent, lintOptions = {}) {
     const options = {
         ...DEFAULT_LINT_OPTIONS,
         ...lintOptions,
-        unsafeRawFilters: [...(lintOptions.unsafeRawFilters ?? DEFAULT_LINT_OPTIONS.unsafeRawFilters)],
-        ...(lintOptions.knownFilters === undefined ? {} : { knownFilters: [...lintOptions.knownFilters] }),
+        unsafeRawFilters: [
+            ...(lintOptions.unsafeRawFilters ?? DEFAULT_LINT_OPTIONS.unsafeRawFilters),
+        ],
+        ...(lintOptions.knownFilters === undefined
+            ? {}
+            : { knownFilters: [...lintOptions.knownFilters] }),
     };
     /**
      * Collected output segments — joined once at the end.
@@ -168,8 +184,12 @@ export function lintContent(originalContent, lintOptions = {}) {
 
     const result = segments.join("");
     diagnostics.push(...analyzeTemplateSafety(originalContent, options));
-    diagnostics.push(...analyzeTemplateCompilation(originalContent, result, options.compile, options.async));
-    diagnostics.sort((left, right) => left.index - right.index || left.ruleId.localeCompare(right.ruleId));
+    diagnostics.push(
+        ...analyzeTemplateCompilation(originalContent, result, options.compile, options.async),
+    );
+    diagnostics.sort(
+        (left, right) => left.index - right.index || left.ruleId.localeCompare(right.ruleId),
+    );
 
     return {
         changed: result !== originalContent,

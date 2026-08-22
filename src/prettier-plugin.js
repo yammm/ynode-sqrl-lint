@@ -21,15 +21,18 @@ export const options = {
         type: "choice",
         category: "Squirrelly",
         default: "parenthesize",
-        description: "Choose how exposed logical OR expressions are repaired in Squirrelly output tags.",
+        description:
+            "Choose how exposed logical OR expressions are repaired in Squirrelly output tags.",
         choices: [
             {
                 value: "parenthesize",
-                description: "Parenthesize the expression and preserve JavaScript logical OR semantics.",
+                description:
+                    "Parenthesize the expression and preserve JavaScript logical OR semantics.",
             },
             {
                 value: "nullish",
-                description: "Replace logical OR with nullish coalescing for project-preferred fallback semantics.",
+                description:
+                    "Replace logical OR with nullish coalescing for project-preferred fallback semantics.",
             },
         ],
     },

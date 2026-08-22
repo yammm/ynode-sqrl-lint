@@ -198,7 +198,10 @@ function createMiddleLineDiff(oldLines, newLines) {
             const previousInsert = frontier.get(diagonal + 1) ?? Number.NEGATIVE_INFINITY;
             let oldIndex;
 
-            if (diagonal === -distance || (diagonal !== distance && previousDelete < previousInsert)) {
+            if (
+                diagonal === -distance ||
+                (diagonal !== distance && previousDelete < previousInsert)
+            ) {
                 oldIndex = previousInsert;
             } else {
                 oldIndex = previousDelete + 1;
@@ -351,10 +354,14 @@ function parseArguments() {
         })
         .example('$0 "**/*.sqrl"', "Check all .sqrl files for formatting and semantic issues")
         .example('$0 "**/*.sqrl" --fix', "Apply formatting and safe semantic repairs")
-        .example("cat file.sqrl | $0 --stdin", "Read from stdin and write formatted output to stdout")
+        .example(
+            "cat file.sqrl | $0 --stdin",
+            "Read from stdin and write formatted output to stdout",
+        )
         .option("stdin", {
             type: "boolean",
-            description: "Read from stdin instead of file globs; formatted output is written to stdout",
+            description:
+                "Read from stdin instead of file globs; formatted output is written to stdout",
         })
         .option("stdin-filepath", {
             type: "string",
@@ -386,7 +393,8 @@ function parseArguments() {
         .option("quiet", {
             alias: "q",
             type: "boolean",
-            description: "Suppress report output; stdin formatted content is still written to stdout",
+            description:
+                "Suppress report output; stdin formatted content is still written to stdout",
         })
         .option("ignore", {
             type: "string",
@@ -522,7 +530,13 @@ async function run() {
      * @param {number} stats.processingErrorCount - Files that caused I/O or read errors.
      * @param {number} stats.durationMs - Wall-clock elapsed time in milliseconds.
      */
-    function exitWithReport({ filesMatched, fixCount, lintErrorCount, processingErrorCount, durationMs }) {
+    function exitWithReport({
+        filesMatched,
+        fixCount,
+        lintErrorCount,
+        processingErrorCount,
+        durationMs,
+    }) {
         const success = processingErrorCount === 0 && lintErrorCount === 0;
 
         if (quiet) {
@@ -650,7 +664,9 @@ async function run() {
     if (stdin) {
         const filePath = stdinFilepath ?? "<stdin>";
         if (process.stdin.isTTY) {
-            emitConfigurationError("Cannot read --stdin from an interactive terminal. Pipe template content to stdin.");
+            emitConfigurationError(
+                "Cannot read --stdin from an interactive terminal. Pipe template content to stdin.",
+            );
             return;
         }
 
@@ -658,12 +674,16 @@ async function run() {
         try {
             input = await readStdin();
         } catch (err) {
-            emitConfigurationError(`Failed to read stdin: ${err instanceof Error ? err.message : String(err)}`);
+            emitConfigurationError(
+                `Failed to read stdin: ${err instanceof Error ? err.message : String(err)}`,
+            );
             return;
         }
 
         const initialLintResult = lintContent(input, lintOptions);
-        const finalizedLintResult = fix ? lintContent(initialLintResult.content, lintOptions) : initialLintResult;
+        const finalizedLintResult = fix
+            ? lintContent(initialLintResult.content, lintOptions)
+            : initialLintResult;
         const diagnostics = finalizedLintResult.diagnostics;
         const hasFormattingError = !fix && initialLintResult.changed;
         const hasLintError = hasFormattingError || diagnostics.length > 0;
@@ -716,12 +736,16 @@ async function run() {
                         }),
                     );
                 } else {
-                    console.error(`${colors.red("Linting Error:")} ${filePath} is not formatted correctly.`);
+                    console.error(
+                        `${colors.red("Linting Error:")} ${filePath} is not formatted correctly.`,
+                    );
                 }
             }
             for (const finding of diagnostics) {
                 console.error(
-                    colors.red(`${filePath}:${finding.line}:${finding.column} ${finding.message} [${finding.ruleId}]`),
+                    colors.red(
+                        `${filePath}:${finding.line}:${finding.column} ${finding.message} [${finding.ruleId}]`,
+                    ),
                 );
             }
         }
@@ -744,7 +768,10 @@ async function run() {
     }
 
     const patterns = globs.map((pattern) => normalizeGlobPattern(pattern));
-    const ignore = ["**/node_modules/**", ...(ignoredPatterns ?? []).map((pattern) => normalizeGlobPattern(pattern))];
+    const ignore = [
+        "**/node_modules/**",
+        ...(ignoredPatterns ?? []).map((pattern) => normalizeGlobPattern(pattern)),
+    ];
     let files;
     try {
         files = (await fg(patterns, { absolute: true, ignore })).sort();
@@ -779,7 +806,9 @@ async function run() {
                 await writeFileAtomically(file, initialLintResult.content);
             }
 
-            const finalizedLintResult = fix ? lintContent(initialLintResult.content, lintOptions) : initialLintResult;
+            const finalizedLintResult = fix
+                ? lintContent(initialLintResult.content, lintOptions)
+                : initialLintResult;
             const diagnostics = finalizedLintResult.diagnostics;
 
             if (fix) {
@@ -888,7 +917,9 @@ async function run() {
             ++lintErrorCount;
             if (!useJsonReport && !quiet) {
                 if (result.status === "needs-formatting") {
-                    console.error(`${colors.red("Linting Error:")} ${result.file} is not formatted correctly.`);
+                    console.error(
+                        `${colors.red("Linting Error:")} ${result.file} is not formatted correctly.`,
+                    );
                 }
                 if (result.coloredDiff) {
                     console.error(result.coloredDiff);

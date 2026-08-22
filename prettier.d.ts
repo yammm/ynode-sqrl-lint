@@ -1,4 +1,10 @@
-import type { ChoiceSupportOption, Parser, Printer, SupportLanguage, SupportOptions } from "prettier";
+import type {
+    ChoiceSupportOption,
+    Parser,
+    Printer,
+    SupportLanguage,
+    SupportOptions,
+} from "prettier";
 
 declare module "prettier" {
     interface Options {
