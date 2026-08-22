@@ -422,6 +422,25 @@ function parseArguments() {
 }
 
 /**
+ * Resolves the per-file result status shared by stdin and file modes.
+ *
+ * @param {object} options - Status inputs.
+ * @param {boolean} options.fix - Whether safe fixes were applied.
+ * @param {boolean} options.changed - Whether formatting changed the content.
+ * @param {number} options.diagnosticCount - Count of remaining semantic diagnostics.
+ * @returns {"needs-formatting" | "fixed-with-errors" | "lint-error" | "fixed" | "unchanged"} Result status.
+ */
+function resolveLintStatus({ fix, changed, diagnosticCount }) {
+    if (!fix && changed) {
+        return "needs-formatting";
+    }
+    if (diagnosticCount > 0) {
+        return changed ? "fixed-with-errors" : "lint-error";
+    }
+    return changed ? "fixed" : "unchanged";
+}
+
+/**
  * Reads all data from stdin as a UTF-8 string.
  *
  * Collects incoming chunks into an array and joins them once the stream
@@ -688,16 +707,11 @@ async function run() {
         const diagnostics = finalizedLintResult.diagnostics;
         const hasFormattingError = !fix && initialLintResult.changed;
         const hasLintError = hasFormattingError || diagnostics.length > 0;
-        const status =
-            !fix && initialLintResult.changed
-                ? "needs-formatting"
-                : diagnostics.length
-                  ? fix && initialLintResult.changed
-                      ? "fixed-with-errors"
-                      : "lint-error"
-                  : initialLintResult.changed
-                    ? "fixed"
-                    : "unchanged";
+        const status = resolveLintStatus({
+            fix: Boolean(fix),
+            changed: initialLintResult.changed,
+            diagnosticCount: diagnostics.length,
+        });
         const entry = {
             file: filePath,
             status,
@@ -815,13 +829,11 @@ async function run() {
             if (fix) {
                 return {
                     file,
-                    status: diagnostics.length
-                        ? initialLintResult.changed
-                            ? "fixed-with-errors"
-                            : "lint-error"
-                        : initialLintResult.changed
-                          ? "fixed"
-                          : "unchanged",
+                    status: resolveLintStatus({
+                        fix: true,
+                        changed: initialLintResult.changed,
+                        diagnosticCount: diagnostics.length,
+                    }),
                     ...(diagnostics.length > 0 ? { diagnostics } : {}),
                 };
             }
@@ -835,7 +847,11 @@ async function run() {
 
             const result = {
                 file,
-                status: initialLintResult.changed ? "needs-formatting" : "lint-error",
+                status: resolveLintStatus({
+                    fix: false,
+                    changed: initialLintResult.changed,
+                    diagnosticCount: diagnostics.length,
+                }),
                 ...(diagnostics.length > 0 ? { diagnostics } : {}),
             };
 
