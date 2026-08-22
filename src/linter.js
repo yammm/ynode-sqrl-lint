@@ -76,65 +76,20 @@ export const rules = Object.freeze(
 );
 
 /**
- * Apply the declarative `rules` semantics with a single linear scan.
- *
- * The rule regexes stack overlapping `[ \t]*` quantifiers around a lazy dot;
- * applying them directly backtracked catastrophically (~O(n^3)) on `{{@` tag
- * bodies containing long whitespace runs without a closing `/`. The scan
- * below preserves the exact match-and-replace semantics of the rule table
- * while staying linear on any input.
+ * Apply the public declarative rule table in first-match order. The patterns
+ * use effectively possessive whitespace trim points, so the exported API and
+ * the built-in formatter now share one linear-time implementation.
  *
  * @param {string} content - Tag content without whitespace-control characters.
  * @returns {string} The normalised content.
  */
 function applyFormattingRules(content) {
-    let start = 0;
-    while (start < content.length && (content[start] === " " || content[start] === "\t")) {
-        ++start;
-    }
-    let end = content.length;
-    while (end > start && (content[end - 1] === " " || content[end - 1] === "\t")) {
-        --end;
-    }
-    const core = content.slice(start, end);
-    const prefix = core[0];
-
-    // Rule `helper-self-closing`: {{@ name() /}}
-    if (prefix === "@" && core.length > 1 && core.at(-1) === "/") {
-        let bodyStart = 1;
-        while (bodyStart < core.length && (core[bodyStart] === " " || core[bodyStart] === "\t")) {
-            ++bodyStart;
-        }
-        let bodyEnd = core.length - 1;
-        while (bodyEnd > bodyStart && (core[bodyEnd - 1] === " " || core[bodyEnd - 1] === "\t")) {
-            --bodyEnd;
-        }
-        return `@ ${core.slice(bodyStart, bodyEnd)} /`;
-    }
-
-    // Rule `helper-open`: helper, branch, execution, and raw-output tags.
-    if (prefix === "@" || prefix === "#" || prefix === "!" || prefix === "*") {
-        let bodyStart = 1;
-        while (bodyStart < core.length && (core[bodyStart] === " " || core[bodyStart] === "\t")) {
-            ++bodyStart;
-        }
-        return `${prefix} ${core.slice(bodyStart)} `;
-    }
-
-    // Rule `block-close`: {{/ if}}, {{/ extends}}
-    if (prefix === "/") {
-        let bodyStart = 1;
-        while (bodyStart < core.length && (core[bodyStart] === " " || core[bodyStart] === "\t")) {
-            ++bodyStart;
-        }
-        const identifier = core.slice(bodyStart);
-        if (/^[A-Za-z_$][\w$.-]*$/u.test(identifier)) {
-            return `/ ${identifier} `;
+    for (const rule of rules) {
+        if (rule.pattern.test(content)) {
+            return content.replace(rule.pattern, rule.replacement);
         }
     }
-
-    // Rule `expression`: {{ foo }}, {{ bar.baz }}
-    return ` ${core} `;
+    return content;
 }
 
 /**

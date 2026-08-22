@@ -58,6 +58,10 @@ export const parsers = {
             // The linter normalises tag spacing but doesn't produce a traditional AST.
             // We return the formatted string wrapped in a pseudo-AST node.
             const result = lintContent(text, {
+                // Prettier consumes only the safely formatted source, not lint
+                // diagnostics, so engine compilation adds work without
+                // affecting the printed result.
+                compile: false,
                 logicalOrFix: prettierOptions.sqrlLogicalOrFix,
             });
             return {
