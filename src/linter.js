@@ -4,12 +4,9 @@ import {
     analyzeTemplateSafety,
     fixTagSafety,
     getTagNesting,
+    scanTemplateTags,
 } from "./safety.js";
-import {
-    AMBIGUOUS_CLOSE_DELIMITER,
-    BLOCK_CLOSE_PATTERN,
-    findCloseDelimiter,
-} from "./tag-scanner.js";
+import { BLOCK_CLOSE_PATTERN } from "./tag-scanner.js";
 
 export { DEFAULT_LINT_OPTIONS } from "./config.js";
 
@@ -159,31 +156,15 @@ export function lintContent(originalContent, lintOptions = {}) {
     const segments = [];
     const diagnostics = [];
     const helperStack = [];
+    const scanResult = scanTemplateTags(originalContent);
     /** Start of the current plain-text run (characters outside any tag). */
     let plainStart = 0;
 
-    while (plainStart < originalContent.length) {
-        const tagStart = originalContent.indexOf("{{", plainStart);
-        if (tagStart === -1) {
-            segments.push(originalContent.slice(plainStart));
-            break;
-        }
-
-        segments.push(originalContent.slice(plainStart, tagStart));
-
-        const isTriple = originalContent[tagStart + 2] === "{";
+    for (const tag of scanResult.tags) {
+        segments.push(originalContent.slice(plainStart, tag.start));
+        const { inner, innerStart, isTriple } = tag;
         const openDelimiter = isTriple ? "{{{" : "{{";
         const closeDelimiter = isTriple ? "}}}" : "}}";
-        const innerStart = tagStart + openDelimiter.length;
-        const closeIndex = findCloseDelimiter(originalContent, innerStart, closeDelimiter);
-
-        if (closeIndex === -1 || closeIndex === AMBIGUOUS_CLOSE_DELIMITER) {
-            // No matching close — emit the rest of the content as-is.
-            segments.push(originalContent.slice(tagStart));
-            break;
-        }
-
-        const inner = originalContent.slice(innerStart, closeIndex);
         const safetyResult = fixTagSafety({
             source: originalContent,
             inner,
@@ -203,17 +184,20 @@ export function lintContent(originalContent, lintOptions = {}) {
         }
 
         segments.push(openDelimiter + formattedInner + closeDelimiter);
-        plainStart = closeIndex + closeDelimiter.length;
+        plainStart = tag.end;
     }
+    // Includes the entire unresolved suffix after an ambiguous or unclosed tag.
+    segments.push(originalContent.slice(plainStart));
 
     const result = segments.join("");
-    diagnostics.push(...analyzeTemplateSafety(originalContent, options));
+    diagnostics.push(...analyzeTemplateSafety({ source: originalContent, options, scanResult }));
     diagnostics.push(
         ...analyzeTemplateCompilation({
             originalSource: originalContent,
             finalizedSource: result,
             enabled: options.compile,
             asyncMode: options.async,
+            unclosedIndex: scanResult.unclosedIndex,
         }),
     );
     diagnostics.sort(

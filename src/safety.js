@@ -127,7 +127,7 @@ export function getTagNesting(inner, isTriple, asyncMode = false) {
  * @param {string} source - Complete template source
  * @returns {{tags: Array<object>, unclosedIndex: (number|undefined), ambiguousIndex: (number|undefined)}}
  */
-function scanTags(source) {
+export function scanTemplateTags(source) {
     const tags = [];
     let cursor = 0;
 
@@ -937,13 +937,15 @@ function indexFromLocation(source, line, column) {
  * Locations in the returned diagnostics always refer to this input source.
  * Engine compilation is handled separately after safe fixes are known.
  *
- * @param {string} source - Original template source
- * @param {object} options - Normalized lint options
+ * @param {object} analysis - Safety analysis inputs
+ * @param {string} analysis.source - Original template source
+ * @param {object} analysis.options - Normalized lint options
+ * @param {object} [analysis.scanResult] - Previously scanned template tags
  * @returns {object[]} Diagnostics
  */
-export function analyzeTemplateSafety(source, options) {
+export function analyzeTemplateSafety({ source, options, scanResult = scanTemplateTags(source) }) {
     const diagnostics = [];
-    const { tags, unclosedIndex, ambiguousIndex } = scanTags(source);
+    const { tags, unclosedIndex, ambiguousIndex } = scanResult;
     const knownFilters = options.knownFilters
         ? new Set([...BUILT_IN_FILTERS, ...options.knownFilters])
         : undefined;
@@ -1243,6 +1245,7 @@ function getCompileError(source, asyncMode) {
  * @param {string} compilation.finalizedSource - Formatted and safely fixed source
  * @param {boolean} compilation.enabled - Whether engine compilation is enabled
  * @param {boolean} compilation.asyncMode - Whether Squirrelly should compile an async template
+ * @param {number} [compilation.unclosedIndex] - Start of an unclosed tag found by the shared scan
  * @returns {object[]} Zero or one compile diagnostic
  */
 export function analyzeTemplateCompilation({
@@ -1250,6 +1253,7 @@ export function analyzeTemplateCompilation({
     finalizedSource,
     enabled,
     asyncMode,
+    unclosedIndex,
 }) {
     if (!enabled) {
         return [];
@@ -1264,7 +1268,6 @@ export function analyzeTemplateCompilation({
         return [];
     }
 
-    const { unclosedIndex } = scanTags(originalSource);
     const finalizedMessage =
         finalizedError instanceof Error ? finalizedError.message : String(finalizedError);
     if (unclosedIndex !== undefined && /unclosed/iu.test(finalizedMessage)) {
