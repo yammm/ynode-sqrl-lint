@@ -258,3 +258,37 @@ test("Formatting is idempotent across all tag types", async (t) => {
         });
     }
 });
+
+test("Pathological whitespace runs inside tags are linted in linear time", () => {
+    // A `{{@` tag body holding a long space run with no self-closing `/`
+    // previously drove the `helper-self-closing` regex into ~O(n^3)
+    // backtracking (8,000 spaces did not finish within 47 seconds).
+    const inputs = [
+        `{{@${" ".repeat(8000)}}}`,
+        `{{@\t${" \t".repeat(4000)}}}`,
+        `{{#${" ".repeat(8000)}}}`,
+        `{{${" ".repeat(8000)}x${" ".repeat(8000)}}}`,
+    ];
+
+    for (const input of inputs) {
+        const startTime = performance.now();
+        const result = lintContent(input, { compile: false });
+        const elapsedMs = performance.now() - startTime;
+        assert.ok(typeof result.content === "string");
+        assert.ok(
+            elapsedMs < 2000,
+            `linting took ${Math.round(elapsedMs)}ms for ${input.length} chars`,
+        );
+    }
+});
+
+test("Pathological whitespace formatting matches the declarative rules", () => {
+    assert.strictEqual(
+        lintContent(`{{@${" ".repeat(64)}}}`, { compile: false }).content,
+        "{{@  }}",
+    );
+    assert.strictEqual(
+        lintContent(`{{@${" ".repeat(64)}/}}`, { compile: false }).content,
+        "{{@  /}}",
+    );
+});

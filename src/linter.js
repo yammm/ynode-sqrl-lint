@@ -25,6 +25,11 @@ export { DEFAULT_LINT_OPTIONS } from "./config.js";
  * Because rules only run on content inside `{{ ... }}` / `{{{ ... }}}` boundaries,
  * they can never produce false positives on surrounding HTML, CSS, or JS.
  *
+ * The table is the declarative specification of the formatter. The linter
+ * applies the same semantics with a hand-written linear scan
+ * ({@link applyFormattingRules}) because the stacked whitespace quantifiers
+ * in these patterns backtrack catastrophically on pathological tag bodies.
+ *
  * @type {Array<{name: string, pattern: RegExp, replacement: string}>}
  */
 export const rules = Object.freeze(
@@ -68,8 +73,70 @@ export const rules = Object.freeze(
 );
 
 /**
+ * Apply the declarative `rules` semantics with a single linear scan.
+ *
+ * The rule regexes stack overlapping `[ \t]*` quantifiers around a lazy dot;
+ * applying them directly backtracked catastrophically (~O(n^3)) on `{{@` tag
+ * bodies containing long whitespace runs without a closing `/`. The scan
+ * below preserves the exact match-and-replace semantics of the rule table
+ * while staying linear on any input.
+ *
+ * @param {string} content - Tag content without whitespace-control characters.
+ * @returns {string} The normalised content.
+ */
+function applyFormattingRules(content) {
+    let start = 0;
+    while (start < content.length && (content[start] === " " || content[start] === "\t")) {
+        ++start;
+    }
+    let end = content.length;
+    while (end > start && (content[end - 1] === " " || content[end - 1] === "\t")) {
+        --end;
+    }
+    const core = content.slice(start, end);
+    const prefix = core[0];
+
+    // Rule `helper-self-closing`: {{@ name() /}}
+    if (prefix === "@" && core.length > 1 && core.at(-1) === "/") {
+        let bodyStart = 1;
+        while (bodyStart < core.length && (core[bodyStart] === " " || core[bodyStart] === "\t")) {
+            ++bodyStart;
+        }
+        let bodyEnd = core.length - 1;
+        while (bodyEnd > bodyStart && (core[bodyEnd - 1] === " " || core[bodyEnd - 1] === "\t")) {
+            --bodyEnd;
+        }
+        return `@ ${core.slice(bodyStart, bodyEnd)} /`;
+    }
+
+    // Rule `helper-open`: helper, branch, execution, and raw-output tags.
+    if (prefix === "@" || prefix === "#" || prefix === "!" || prefix === "*") {
+        let bodyStart = 1;
+        while (bodyStart < core.length && (core[bodyStart] === " " || core[bodyStart] === "\t")) {
+            ++bodyStart;
+        }
+        return `${prefix} ${core.slice(bodyStart)} `;
+    }
+
+    // Rule `block-close`: {{/ if}}, {{/ extends}}
+    if (prefix === "/") {
+        let bodyStart = 1;
+        while (bodyStart < core.length && (core[bodyStart] === " " || core[bodyStart] === "\t")) {
+            ++bodyStart;
+        }
+        const identifier = core.slice(bodyStart);
+        if (/^[A-Za-z_$][\w$.-]*$/u.test(identifier)) {
+            return `/ ${identifier} `;
+        }
+    }
+
+    // Rule `expression`: {{ foo }}, {{ bar.baz }}
+    return ` ${core} `;
+}
+
+/**
  * Normalise spacing inside a single Squirrelly tag's inner content.
- * Applies the first matching rule from the `rules` array.
+ * Applies the `rules` semantics — first matching rule wins.
  *
  * @param {string} inner - The text between the opening `{{` and closing `}}` delimiters.
  * @returns {string} The normalised inner content.
@@ -94,21 +161,15 @@ function formatTagContent(inner) {
         return `${openingControl} ${closingControl}`;
     }
 
-    for (const rule of rules) {
-        if (rule.pattern.test(content)) {
-            const formatted = content.replace(rule.pattern, rule.replacement);
+    const formatted = applyFormattingRules(content);
 
-            // Do not add horizontal whitespace immediately before an opening
-            // newline. `{{\nvalue\n}}` previously became `{{ \nvalue\n }}`,
-            // creating trailing whitespace on the opening-delimiter line.
-            const cleaned = formatted
-                .replace(/^([@#!/*]?)[ \t]+(?=\r?\n)/u, "$1")
-                .replace(/(\r?\n)[ \t]+$/u, "$1");
-            return openingControl + cleaned + closingControl;
-        }
-    }
-    // No rule matched — return the content unchanged.
-    return inner;
+    // Do not add horizontal whitespace immediately before an opening
+    // newline. `{{\nvalue\n}}` previously became `{{ \nvalue\n }}`,
+    // creating trailing whitespace on the opening-delimiter line.
+    const cleaned = formatted
+        .replace(/^([@#!/*]?)[ \t]+(?=\r?\n)/u, "$1")
+        .replace(/(\r?\n)[ \t]+$/u, "$1");
+    return openingControl + cleaned + closingControl;
 }
 
 /**
