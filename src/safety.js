@@ -125,7 +125,7 @@ export function getTagNesting(inner, isTriple, asyncMode = false) {
  * Scan all complete Squirrelly tags in a template.
  *
  * @param {string} source - Complete template source
- * @returns {{tags: Array<object>, unclosedIndex: (number|undefined)}}
+ * @returns {{tags: Array<object>, unclosedIndex: (number|undefined), ambiguousIndex: (number|undefined)}}
  */
 function scanTags(source) {
     const tags = [];
@@ -144,7 +144,7 @@ function scanTags(source) {
         const closeIndex = findCloseDelimiter(source, innerStart, closeDelimiter);
 
         if (closeIndex === AMBIGUOUS_CLOSE_DELIMITER) {
-            return { tags };
+            return { tags, ambiguousIndex: start };
         }
         if (closeIndex === -1) {
             return { tags, unclosedIndex: start };
@@ -937,7 +937,7 @@ function indexFromLocation(source, line, column) {
  */
 export function analyzeTemplateSafety(source, options) {
     const diagnostics = [];
-    const { tags, unclosedIndex } = scanTags(source);
+    const { tags, unclosedIndex, ambiguousIndex } = scanTags(source);
     const knownFilters = options.knownFilters
         ? new Set([...BUILT_IN_FILTERS, ...options.knownFilters])
         : undefined;
@@ -951,6 +951,21 @@ export function analyzeTemplateSafety(source, options) {
                 unclosedIndex,
                 "valid-squirrelly-syntax",
                 "Unclosed Squirrelly tag; the rest of the file cannot be analyzed reliably.",
+            ),
+        );
+    }
+
+    // With engine compilation enabled, Squirrelly itself reports the
+    // irreducibly ambiguous tag. Without it, this diagnostic keeps the
+    // documented guarantee that ambiguous tags are reported, not silently
+    // passed through unchanged.
+    if (ambiguousIndex !== undefined && !options.compile) {
+        diagnostics.push(
+            diagnostic(
+                source,
+                ambiguousIndex,
+                "valid-squirrelly-syntax",
+                "Tag is ambiguous between a block close and a leading regex expression; it was left unchanged. Parenthesize the expression to disambiguate.",
             ),
         );
     }

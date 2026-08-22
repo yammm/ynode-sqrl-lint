@@ -672,3 +672,13 @@ test("null-output fixes preserve replacement-pattern text in expressions", () =>
     const ampersand = lintContent('{{ it?.map["$&"] }}', { noImplicitNullOutput: true });
     assert.strictEqual(ampersand.content, '{{ it?.map["$&"] ?? "" }}');
 });
+
+test("ambiguous tags are reported even when engine compilation is disabled", () => {
+    for (const input of ["{{/if}}/.test(x)}}", "{{ /foo}}/ }}"]) {
+        const result = lintContent(input, { compile: false });
+        assert.strictEqual(result.changed, false);
+        assert.strictEqual(result.content, input);
+        assert.deepStrictEqual(ruleIds(result), ["valid-squirrelly-syntax"]);
+        assert.match(result.diagnostics[0].message, /ambiguous/iu);
+    }
+});
