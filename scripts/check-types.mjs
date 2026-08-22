@@ -26,7 +26,7 @@ async function main() {
     const temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "sqrl-lint-types-"));
     const npmEnvironment = {
         ...process.env,
-        npm_config_cache: path.join(os.tmpdir(), "ynode-types-npm-cache"),
+        npm_config_cache: path.join(temporaryRoot, "npm-cache"),
     };
 
     try {
