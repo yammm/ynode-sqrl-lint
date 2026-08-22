@@ -661,3 +661,14 @@ test("a second pass is clean after all safe fixes", () => {
         false,
     );
 });
+
+test("null-output fixes preserve replacement-pattern text in expressions", () => {
+    // `$'`, `$&`, and friends are meaningful in a String.replace replacement
+    // string; the fixer must treat the expression as literal text.
+    const result = lintContent('{{ it?.map["$\'"] }}', { noImplicitNullOutput: true });
+    assert.strictEqual(result.content, '{{ it?.map["$\'"] ?? "" }}');
+    assert.deepStrictEqual(ruleIds(result), ["no-implicit-null-output"]);
+
+    const ampersand = lintContent('{{ it?.map["$&"] }}', { noImplicitNullOutput: true });
+    assert.strictEqual(ampersand.content, '{{ it?.map["$&"] ?? "" }}');
+});

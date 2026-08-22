@@ -595,9 +595,12 @@ export function fixTagSafety(source, inner, innerStart, isTriple, options, conte
                         true,
                     ),
                 );
+                // The replacer must be a function: passing the expression as a
+                // replacement string interprets `$&`, `$'`, and backtick-adjacent
+                // patterns inside it and silently corrupts the template.
                 const replacement = split.expression.replace(
                     expressionText,
-                    `${expressionText} ?? ""`,
+                    () => `${expressionText} ?? ""`,
                 );
                 result =
                     result.slice(0, description.bodyStart) +
