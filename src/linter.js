@@ -226,8 +226,13 @@ export function lintContent(originalContent, lintOptions = {}) {
         }
 
         const inner = originalContent.slice(innerStart, closeIndex);
-        const safetyResult = fixTagSafety(originalContent, inner, innerStart, isTriple, options, {
-            parentHelper: helperStack.at(-1),
+        const safetyResult = fixTagSafety({
+            source: originalContent,
+            inner,
+            innerStart,
+            isTriple,
+            options,
+            context: { parentHelper: helperStack.at(-1) },
         });
         diagnostics.push(...safetyResult.diagnostics);
         const formattedInner = formatTagContent(safetyResult.inner);
@@ -246,7 +251,12 @@ export function lintContent(originalContent, lintOptions = {}) {
     const result = segments.join("");
     diagnostics.push(...analyzeTemplateSafety(originalContent, options));
     diagnostics.push(
-        ...analyzeTemplateCompilation(originalContent, result, options.compile, options.async),
+        ...analyzeTemplateCompilation({
+            originalSource: originalContent,
+            finalizedSource: result,
+            enabled: options.compile,
+            asyncMode: options.async,
+        }),
     );
     diagnostics.sort(
         (left, right) => left.index - right.index || left.ruleId.localeCompare(right.ruleId),

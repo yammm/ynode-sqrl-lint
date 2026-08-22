@@ -440,16 +440,17 @@ function rewriteLogicalOrAsNullish(expression, exposedOperators, asyncMode) {
 /**
  * Apply the small set of semantics-preserving source fixes to one tag.
  *
- * @param {string} source - Complete original template source
- * @param {string} inner - Original tag body
- * @param {number} innerStart - Absolute start of the tag body
- * @param {boolean} isTriple - Whether the tag used triple braces
- * @param {object} options - Normalized lint options
- * @param {object} [context] - Surrounding template context
- * @param {string} [context.parentHelper] - Innermost open helper name
+ * @param {object} tagFix - Tag fix inputs.
+ * @param {string} tagFix.source - Complete original template source
+ * @param {string} tagFix.inner - Original tag body
+ * @param {number} tagFix.innerStart - Absolute start of the tag body
+ * @param {boolean} tagFix.isTriple - Whether the tag used triple braces
+ * @param {object} tagFix.options - Normalized lint options
+ * @param {object} [tagFix.context] - Surrounding template context
+ * @param {string} [tagFix.context.parentHelper] - Innermost open helper name
  * @returns {{inner: string, diagnostics: object[]}}
  */
-export function fixTagSafety(source, inner, innerStart, isTriple, options, context = {}) {
+export function fixTagSafety({ source, inner, innerStart, isTriple, options, context = {} }) {
     const diagnostics = [];
     let result = inner;
     let description = describeTag(result, isTriple);
@@ -1237,13 +1238,19 @@ function getCompileError(source, asyncMode) {
  * exposes a different engine error, it is reported at the start of the
  * original source rather than mixing coordinate spaces.
  *
- * @param {string} originalSource - Original template source
- * @param {string} finalizedSource - Formatted and safely fixed source
- * @param {boolean} enabled - Whether engine compilation is enabled
- * @param {boolean} asyncMode - Whether Squirrelly should compile an async template
+ * @param {object} compilation - Compilation inputs.
+ * @param {string} compilation.originalSource - Original template source
+ * @param {string} compilation.finalizedSource - Formatted and safely fixed source
+ * @param {boolean} compilation.enabled - Whether engine compilation is enabled
+ * @param {boolean} compilation.asyncMode - Whether Squirrelly should compile an async template
  * @returns {object[]} Zero or one compile diagnostic
  */
-export function analyzeTemplateCompilation(originalSource, finalizedSource, enabled, asyncMode) {
+export function analyzeTemplateCompilation({
+    originalSource,
+    finalizedSource,
+    enabled,
+    asyncMode,
+}) {
     if (!enabled) {
         return [];
     }
