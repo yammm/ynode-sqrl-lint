@@ -43,6 +43,38 @@ const FILTER_LIST_KEYS = ["knownFilters", "unsafeRawFilters"];
 const LOGICAL_OR_FIX_VALUES = new Set(["parenthesize", "nullish"]);
 
 /**
+ * A resolved set of linter options.
+ *
+ * @typedef {Record<string, boolean|string|string[]>} LintOptions
+ */
+
+/**
+ * A path-matched partial override applied to the base lint options.
+ *
+ * @typedef {object} LintOverride
+ * @property {string[]} files - Working-directory-relative glob patterns.
+ * @property {string[]} [excludedFiles] - Glob patterns excluded from the override.
+ * @property {LintOptions} options - Partial options applied when the override matches.
+ */
+
+/**
+ * Loaded base options and their ordered path overrides.
+ *
+ * @typedef {object} LintConfiguration
+ * @property {LintOptions} options - Resolved base options.
+ * @property {LintOverride[]} [overrides] - Ordered path-specific overrides.
+ * @property {string} [path] - Absolute source configuration path when one was loaded.
+ */
+
+/**
+ * Resolves effective lint options for one file path.
+ *
+ * @callback LintOptionsResolver
+ * @param {string} filePath - File path to resolve relative to the configured working directory.
+ * @returns {LintOptions} Detached effective options for the file.
+ */
+
+/**
  * Creates an error that identifies the configuration file being loaded.
  *
  * @param {string} configFilePath - Absolute configuration file path.
@@ -120,7 +152,7 @@ function readFilterList(config, key, configFilePath) {
  *
  * @param {unknown} parsed - Parsed JSON configuration.
  * @param {string} configFilePath - Absolute configuration file path.
- * @returns {Record<string, boolean | string | string[]>} Validated lint options.
+ * @returns {LintOptions} Validated lint options.
  */
 function validateLintOptions(parsed, configFilePath, { context = "configuration" } = {}) {
     if (!isPlainObject(parsed)) {
@@ -247,7 +279,7 @@ function readOverridePatterns(override, key, configFilePath, overrideIndex, requ
  *
  * @param {unknown} rawOverrides - Parsed `overrides` value.
  * @param {string} configFilePath - Absolute configuration file path.
- * @returns {Array<{files: string[], excludedFiles: string[], options: Record<string, boolean|string|string[]>}>} Validated overrides.
+ * @returns {LintOverride[]} Validated overrides.
  */
 function validateOverrides(rawOverrides, configFilePath) {
     if (rawOverrides === undefined) {
@@ -302,7 +334,7 @@ function validateOverrides(rawOverrides, configFilePath) {
  *
  * @param {unknown} parsed - Parsed JSON configuration.
  * @param {string} configFilePath - Absolute configuration file path.
- * @returns {{options: Record<string, boolean|string|string[]>, overrides: Array<{files: string[], excludedFiles: string[], options: Record<string, boolean|string|string[]>}>}} Validated configuration.
+ * @returns {LintConfiguration} Validated configuration.
  */
 function validateConfig(parsed, configFilePath) {
     if (!isPlainObject(parsed)) {
@@ -328,10 +360,10 @@ function validateConfig(parsed, configFilePath) {
  * forward-slash, working-directory-relative path. Matching entries are applied
  * in declaration order, so later entries deterministically win.
  *
- * @param {{options: Record<string, boolean|string|string[]>, overrides?: Array<{files: string[], excludedFiles?: string[], options: Record<string, boolean|string|string[]>}>}} config - Loaded lint configuration.
+ * @param {LintConfiguration} config - Loaded lint configuration.
  * @param {object} [settings] - Resolver settings.
  * @param {string} [settings.cwd=process.cwd()] - Base directory for file paths and override globs.
- * @returns {(filePath: string) => Record<string, boolean|string|string[]>} Per-file option resolver.
+ * @returns {LintOptionsResolver} Per-file option resolver.
  */
 export function createLintOptionsResolver(config, { cwd = process.cwd() } = {}) {
     const resolvedCwd = path.resolve(cwd);
@@ -382,7 +414,7 @@ export function createLintOptionsResolver(config, { cwd = process.cwd() } = {}) 
  * @param {object} [settings] - Configuration lookup settings.
  * @param {string} [settings.configPath] - Explicit configuration path, relative to `cwd` when needed.
  * @param {string} [settings.cwd=process.cwd()] - Directory used for implicit lookup and relative paths.
- * @returns {Promise<{options: Record<string, boolean | string | string[]>, overrides: Array<{files: string[], excludedFiles: string[], options: Record<string, boolean|string|string[]>}>, path: string | undefined}>} Loaded options, ordered overrides, and source path.
+ * @returns {Promise<LintConfiguration>} Loaded options, ordered overrides, and source path.
  */
 export async function loadLintOptions({ configPath, cwd = process.cwd() } = {}) {
     const isExplicit = configPath !== undefined;
