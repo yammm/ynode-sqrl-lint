@@ -1,31 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
 
-#
-# Copyright (c) 2026 Michael Welter <me@mikinho.com>
-#
-# MIT License
-#
-
-#
-# Git pre-commit hook
-#
-
-set -euo pipefail
-
-FILES=()
-while IFS= read -r -d '' file; do
-    FILES+=("$file")
-done < <(git diff --cached --name-only -z --diff-filter=ACMRTUXB)
-
-if [ "${#FILES[@]}" -gt 0 ]; then
-    echo "[pre-commit] Running Prettier..."
-    npx prettier --check --ignore-unknown "${FILES[@]}"
-
-    echo "[pre-commit] Running ESLint..."
-    npx eslint --no-warn-ignored "${FILES[@]}"
-fi
-
-echo "[pre-commit] Running Test Suite..."
-npm test
-
-echo "[pre-commit] All checks passed!"
+# Keep path handling in Node so staged filenames are never reparsed by a shell.
+exec node "$(dirname "$0")/../check-staged.mjs"

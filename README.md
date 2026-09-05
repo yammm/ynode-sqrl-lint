@@ -17,6 +17,10 @@ A dedicated linter and formatter for Squirrelly (`.sqrl`) templates, built speci
 - **Conservative Auto-Repair:** `--fix` applies formatting and semantics-preserving repairs while leaving judgment calls as diagnostics.
 - **Fast-Glob Powered:** Built-in `fast-glob` processing natively supports arbitrary inclusion and exclusion targeting.
 
+## Node.js support
+
+This package requires Node.js 20.19.0 or newer. CI exercises the exact 20.19.0, 22.13.0, and 24.0.0 boundaries. Node.js 20 remains tested only to preserve the current major-version contract even though upstream support has ended; use Node.js 22 or 24 for supported production deployments. A newly released Node.js major is not considered supported until it is added to CI, even when the open `engines` range admits it.
+
 ## Installation
 
 ```bash
