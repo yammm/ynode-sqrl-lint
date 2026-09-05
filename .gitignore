@@ -39,12 +39,12 @@ Icon?
 build/
 *.xcodeproj/xcuserdata/
 
-# Ignore root-level markdown except README and CONTRIBUTING
+# Local review and agent guidance
+/.review/
 /*.md
 
 # Public repository policy files must remain trackable.
-!AGENTS.md
-!CLAUDE.md
+!CHANGELOG.md
 !README.md
 !CONTRIBUTING.md
 !NOTICE.md
